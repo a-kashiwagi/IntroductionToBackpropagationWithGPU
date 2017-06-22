@@ -9,6 +9,12 @@ Back Propagation
 複数の層を超える誤差の伝搬方法
 ==============================
 
+.. figure:: neuron_model.png
+	:alt: 神経細胞とモデル
+	:align: center
+
+	図1.神経細胞とモデル
+
 Forward Propagation(順伝搬)では、入力層から出力層に向かって、値と荷重の総和
 を伝搬して行き、出力層で結果を得るものでしたが、それはその時の結合荷重による
 ものでした。Deep Learing(Neural Network)では、学習と言う段階を経て、入力値に
@@ -48,6 +54,12 @@ rkが発見された初期の頃、パーセプトロンと言うモデルが利
 います。実際、その伝達物質や伝達方法が見つかった、と言うニュースが時々流れて
 いますが、確証されてはいないようです。
 
+.. figure:: Backpropagation.png
+	:alt: 3 phases neural network
+	:align: center
+
+	図2. 三層 Neural Network
+
 そこで考案されたのが、確率的勾配降下法によるBackpropagation(誤差逆伝搬)です。
 確率的勾配降下法では、上記パーセプトロンによる学習方法と同じように正しい答え
 との誤差を用いて結合荷重を更新して行きますが、更新には誤差に対する結合荷重に
@@ -65,24 +77,22 @@ rkが発見された初期の頃、パーセプトロンと言うモデルが利
 
 	E:誤差値
 
-	z:前層出力
-
-	w:結合荷重　
+	w:結合荷重
 
 ..  	E:誤差値　・・・　\frac{ \sum ( t - z )^2 }{ 2 }
 
 .. 誤差値Eは、式(2)の通り二乗誤差を用いますが、Eを結合荷重wで微分した :math:`\Delta E`
 .. を求めると、消えてしまいます。式(3)
-.. 
+..
 .. .. math::
 .. 	:label: 誤差Eの結合荷重wによる微分dE
-.. 
+..
 .. 	\Delta E = \frac{ \partial E }{ \partial w } = ( y - t ) \cdot z
-.. 
+..
 .. 	y = w \cdot z
-.. 
+..
 .. 	z:前層出力
-.. 
+..
 .. 	w:結合荷重　
 
 そして、この結合荷重の更新を出力層から、入力層に向かって遡ってゆくことから
@@ -92,34 +102,42 @@ Backpropagation(誤差逆伝搬)と呼ばれます。誤差値はEで表しま�
 .. math::
 	:label: 誤差信号d
 
-	\delta = ( w \cdot {\delta}_{k} ) \cdot f'(z)
+	\delta_{j} = \sum_{k=1}^{N} \left \{ ( w_{jk} \cdot {\delta}_{k} ) \cdot f'(z_{j}) \right \}
 
-	f'(z) = \{ 1 - f( z ) \} \cdot f(z)
+	f'(z_{j}) = \{ 1 - f( z_{j} ) \} \cdot f(z_{j})
 
 	f:シグモイド関数
 
 	f':微分したシグモイド関数
 
+	{\delta}_{j}:誤差信号（入力層側）
+
 	{\delta}_{k}:誤差信号（出力層側）
 
-	z:前層出力（入力層側）
+	z_{j}:前層出力（入力層側）
 
-	w:結合荷重　
+	w_{jk}:結合荷重　
+
+	N:出力層側のユニット数
 
 :math:`f'` は、前の項目「Forward Propagation」で解説しているシグモイド関数を
-微分したものです。出力層の :math:`\delta` だけは下記の式によって得ます。
+微分したものです。出力層の :math:`\delta_{k}` だけは下記の式によって得ます。
+:math:`\delta_{j}` より入力層側の :math:`\delta` （図2は三層の為、:math:`\delta_{i}` 
+から入力層側は使用しません）は、式(3)によって計算します。
 
 .. math::
 	:label: 出力層の誤差信号d
 
-	\delta = ( z - t )
+	\delta_{k} = ( z_{k} - t )
 
-	z:出力層出力
+	z_{k}:出力層出力
 
 	t:教師信号
 
-この :math:`\delta` から初めて、中間層(出力層側)から順番に入力層側へ :math:`\delta` 
-を計算して行きます。具体的なコードで表すと、以下のようになります。
+この :math:`\delta_{k}` から初めて、中間層の出力層側から順番に入力層側へ :math:`\delta`
+を計算して行きます。具体的なコードで表すと、以下のようになります。LIST 1,2,3,4は、
+引数や変数の宣言などの計算に付随する処理ですが、LIST 5が誤差信号 :math:`\delta` の
+処理になります。
 
 LIST 1. 引数取得
 
@@ -167,8 +185,9 @@ LIST 3. GPUに関連した処理
 	}
 
 nVIDIA GPU CUDA Cにおける定形処理のようなものですが、実際に実行される
-threadは、jユニットごとに一つとなる為、CUDAが呼び出したthread番号が
-jユニットに対応していないthreadは、何もせずに処理を返します。
+threadは、jユニットごとに一つとなる為、CUDAが呼び出したthreadが
+jユニットに対応していない場合は、何もせずに処理を返します。詳細は、CUDA C
+のリファレンス等をご参照願います。
 
 LIST 4. 直線的なメモリ領域から、jの位置を求める関数
 
@@ -179,189 +198,211 @@ LIST 4. 直線的なメモリ領域から、jの位置を求める関数
 		return j + (jmax * k);
 	}
 
+こちらも前の項目「汎用GPUにおける結合荷重及び関連値の保持」で述べてい
+る通り、二次元配列であるw(i,j)を直線的な一次元配列へ格納している為、一
+次元配列から二次元配列への変換を行っている。
+
 LIST 5. :math:`\delta` の計算
 
 .. code-block:: c
 
 					// set neuron instance
-	n = (NEURON_T *)mem;
+		n = (NEURON_T *)mem;
 					// set phase number
-	jphase = trg + 0;
-	kphase = trg + 1;
+		jphase = trg + 0;
+		kphase = trg + 1;
 					// set number of unit
-	unitj = n->z_num[jphase];
-	unitk = n->z_num[kphase];
+		unitj = n->z_num[jphase];
+		unitk = n->z_num[kphase];
 
 					// set block id
-	j_cnt = blockIdx.x;
+		j_cnt = blockIdx.x;
 
-	if(j_cnt < unitj){
+		if(j_cnt < unitj){
 					// calculate forward
-		sum = 0;
+			sum = 0;
 
-		ff = differented_sigmoid( n->z[jphase][j_cnt] );
+			ff = differented_sigmoid( n->z[jphase][j_cnt] );
 
-		for( k_cnt = 0; k_cnt < unitk; k_cnt++ ){
+			for( k_cnt = 0; k_cnt < unitk; k_cnt++ ){
 
-			j = calcj( j_cnt, unitj, k_cnt );
+				j = calcj( j_cnt, unitj, k_cnt );
 
-			sum += n->w[kphase][j] * n->d[kphase][k_cnt] * ff;
+				sum += n->w[kphase][j] * n->d[kphase][k_cnt] * ff;
+			}
+
+			n->d[jphase][j_cnt] = sum;
+
+			n->db[jphase][j_cnt]
+				= n->db[jphase][j_cnt] * n->b[jphase][j_cnt] * ff;
 		}
-
-		n->d[jphase][j_cnt] = sum;
-
-		n->db[jphase][j_cnt]
-			= n->db[jphase][j_cnt] * n->b[jphase][j_cnt] * ff;
-	}
 					// Normal return
-	return;
+		return;
+	}
 
-こうして計算した各層の :math:`\delta` と式(2)を用いて、各層の結合荷重wを更新します。
+計算方法は先述の通りですが、構造体要素に付いている配列添え字は、例えば
+n->z[jphase][j_cnt] の場合、jphase層のj_cntユニットのz値を表しています。
+n->dbは、バイアス :math:`b` の誤差信号 :math:`\delta` です。計算方法は
+同じで、各ユニットに一つずつしか無いため、総和は取りません。同様に、 出
+力層における :math:`\delta_{k}` の計算処理の具体的なコードは、以下のよ
+うになります。
 
-これは、一般的な総和の式ですが、入力される信号 :math:`x` に荷重 :math:`w` を
-掛けて、その総計をとり、バイアスを足すというものです。プログラミング言語(C言
-語)で表すと、このようになります。
+LIST 6.引数取得
 
 .. code-block:: c
 
-        z = 0;
+	__global__ void calc_delta_at_out(
+		long trg,
+		long uniti,
+		long unitj,
+		long l_num,
+		void *mem,
+		double *teach,
+		long teach_num
+	){
 
-        for( i_cnt = 0; i_cnt < N; i_cnt++ ){
+LIST 7.変数宣言
 
-        	z += w[i_cnt][j_cnt] * x[i_cnt];
-        }
+.. code-block:: c
 
-        z += b[j_cnt];
+	int tid;
+					// thread id
+	long j_cnt;
+					// counter of output side
+	NEURON_T *n;
+					// Neuron structure
+	long jphase;
+					// number of output phase
 
-プログラムで表すと、さほどの事はなく、単に集計しているだけなのがよく分かります。
-神経細胞を模式的に表すと、下記のようになります。左の図は、実際の神経細胞、右の
-図は、その数理モデルの模式図です。つまり、複数の入力を受取り、一つの出力を次の
-神経細胞に渡す生きたデバイスです。
+LIST 8.GPUに関連した処理
 
-.. figure:: neuron_model.png
-	:alt: 神経細胞とモデル
-	:align: center
+.. code-block:: c
 
-	図1.神経細胞とモデル
+	tid = blockIdx.x;
+	if(tid > unitj - 1 || tid < 0){
+					// check for enable threads
+		return;
+	}
 
-この図を例に説明すると、前の神経細胞からの入力値 :math:`x_1` 〜 :math:`x_3` に、
-それぞれの結合荷重 :math:`w_1` 〜 :math:`w_3` を掛けた値を合計し、それにバイア
-スを加えます。次の神経細胞へ信号を伝達するには一定の条件があり、この総和がある
-値（閾値 :math:`θ` ）を超えると出力 :math:`z` が :math:`1` となります。この総和
-を :math:`u` とすると、出力 :math:`z` は以下の関数 :math:`z=f(u)` となります。
+LIST 9. 出力層における :math:`\delta` の計算
 
-.. math::
-	:label: 閾値による出力値
+.. code-block:: c
 
-	f(u) =\begin{cases}1 & u >=  \theta \\0 & u < \theta \end{cases}
+					// set neuron instance
+		n = (NEURON_T *)mem;
+					// set a phase number for i and j
+		jphase = trg + 1;
+					// set pointer for each value
+					// set block id
+		j_cnt = blockIdx.x;
 
-	θ:閾値
+		if(j_cnt < unitj){
+					// calculate forward
+			n->d[jphase][j_cnt]
+				= sigmoid(n->z[jphase][j_cnt])
+				- teach[(unitj * teach_num) + j_cnt];
 
-Neural Networkにおける「学習」処理とは、目的の出力が得られるように、結合荷重 
-:math:`w` をさまざまに変化させる処理を指します。この結合荷重を変化させることで、
-入力に対する出力を変化・決定させることができます。
+			n->db[jphase][j_cnt] = n->d[jphase][j_cnt];
+		}
+					// Normal return
+		return;
+	}
 
-神経細胞の組合せで、動物は情報処理を行っているわけですが、この一つの方式のデバ
-イスで、現在のノイマン型コンピュータを構成しているディジタル回路（論理積・論理
-和・排他的論理和等）をすべて表すことができます。つまり、動物の神経細胞でいま私
-達が利用しているコンピュータを作成することができます。コンピュータにできること
-は、動物の脳でも可能なのです。
+プログラムの構造は、前述の中間層における :math:`\delta` と同じです。
+引数に教師信号teachとその数teach_numを受け取っています。こうして計
+算した各層の :math:`\delta` と式(2)を用いて、各層の結合荷重 :math:`w` 
+を更新します。
 
-活性化関数
-==========
+LIST 10.引数取得
 
-活性化関数は、細胞やたんぱく質の反応をモデル化したものですが、Neural Networkで
-は出力値 :math:`z` を実際の神経細胞の出力と考えられる形に近づけるために用いられ
-ます。一般に、ミカエリス・メンテン式によく似た非線形関数であるシグモイド関数や
-tanh関数、また出力が線形になる正規化線形関数などがあります。今回は、活性化関数
-の基本として受け入れられているシグモイド関数を用いています。
+.. code-block:: c
 
-.. math::
-	:label: シグモイド関数
+	__global__ void calc_delta_w(
+		long trg,
+		long uniti,
+		long unitj,
+		long l_num,
+		void *mem
+	){
 
-	f(x) = \frac{1}{1+ e^{- \alpha x} }
+LIST 11.変数宣言
 
-	x:入力
+.. code-block:: c
 
-	e:自然対数
+	int tid;
+					// thread id
+	long i_cnt;
+					// counter of input side
+	long j_cnt;
+					// counter of output side
+	NEURON_T *n;
+					// neuron structure
+	double *zi;
+					// Pointer of d at j side
+	double *dj;
+					// Pointer of b at j side
+	double *bj;
+					// Pointer of db at j side
+	double *dbj;
+					// pointer of  input side z
+	long iphase;
+					// number of input phase
+	long jphase;
+					// number of output phase
+	double ETA;
+					// Number of larning rate
 
-	α:定数
+LIST 12.GPUに関連した処理
 
-シグモイド関数は、非線形の関数であり、入力の値域を :math:`-∞` 〜 :math:`+∞` に
-取る、出力 :math:`0` 〜 :math:`1` の関数です。出力は下記のようになります。シグ
-モイドとは、アルファベットのSの意味です。
+.. code-block:: c
 
-.. figure:: sigmoid.png
-	:alt: シグモイド曲線
-	:align: center
+	tid = blockIdx.x;
+					// Set block ID
 
-	図2.シグモイド曲線
+	if(tid > unitj - 1 || tid < 0){
+					// check for enable threads
+		return;
+	}
 
-注意しなければいけないのは、入力の値域が無限大とはいえ、その可変域は限られる点
-です。大きすぎる値や小さすぎる値を入力しても、 :math:`1` または :math:`0` の出
-力しか得られなくなります。定数 :math:`α` によってシグモイド曲線の形を変えること
-が出来るため、入力値の最大・最小値に合わせて :math:`α` を変更するか、入力値を正
-規化するなどして調整します。
+LIST 13. :math:`\delta` による :math:`w` の更新
 
-論理積と論理和による実際の計算例
-================================
+.. code-block:: c
 
-論理積と論理和の計算を例に、実際にForward Propagation(順伝搬)を計算してみます。
-論理積の入力と出力(真理値表)は、以下の通りです。
+					// set neuron instance
+		n = (NEURON_T *)mem;
+					// Set phase number for i and j
+		iphase = trg + 0;
+		jphase = trg + 1;
 
-.. csv-table:: 論理積(AND)
-	:header: ""," :math:`x_1` "," :math:`x_2` "," :math:`z` "
-	:widths: 10, 10, 10, 10
-	:stub-columns: 1
+		ETA = 0.1;
+					// set z pointer
+		zi = n->z[iphase];
+		dj = n->d[jphase];
+		bj = n->b[jphase];
+		dbj = n->db[jphase];
+					// set block id
+		j_cnt = blockIdx.x;
 
-	"入力1:", 0,   0,    0
-	"入力2:", 0,   1,    0
-	"入力3:", 1,   0,    0
-	"入力4:", 1,   1,    1
+		if(j_cnt < unitj){
+					// calculate w
 
-そして、結合荷重 :math:`w_1=0.53` と :math:`w_2=0.33`、閾値 :math:`θ=0.7` とす
-ると、式1と式2を上記の表のそれぞれの値について計算した結果は、以下のようになり
-ます。
+			for( i_cnt = 0; i_cnt < uniti; i_cnt++ ){
 
-.. csv-table:: 論理積(AND)の計算結果
-	:header: "","式1:( :math:`x_1 w_1)+(x_2 w_2)`","式2:閾値との関係"," :math:`z` "
-	:widths: 10, 10, 10, 10
-	:stub-columns: 1
+				n->w[jphase][i_cnt + (uniti * j_cnt)]
+					-= ( dj[j_cnt] * sigmoid(zi[i_cnt]) ) * ETA;
+			}
 
-	"入力1:", :math:`(0*0.53)+(0*0.33)=0.00` , :math:`< 0.7` , :math:`0`
-	"入力2:", :math:`(0*0.53)+(1*0.33)=0.33` , :math:`< 0.7` , :math:`0`
-	"入力3:", :math:`(1*0.53)+(0*0.33)=0.53` , :math:`< 0.7` , :math:`0`
-	"入力4:", :math:`(1*0.53)+(1*0.33)=0.86` , :math:`> 0.7` , :math:`1`
+			bj[j_cnt] -= dbj[j_cnt] * ETA;
 
-閾値 :math:`θ` 以下の場合は :math:`z=0` 、閾値 :math:`θ` 以上の場合は :math:`z=1` 
-となります。また、論理和の入力と出力(真理値表)は、以下の通りです。
+		}
+					// Normal terminate
+		return;
+	}
 
-.. csv-table:: 論理和(OR)
-	:header: ""," :math:`x_1` "," :math:`x_2` "," :math:`z` "
-	:widths: 10, 10, 10, 10
-	:stub-columns: 1
-
-	"入力1:", 0,   0,    0
-	"入力2:", 0,   1,    1
-	"入力3:", 1,   0,    1
-	"入力4:", 1,   1,    1
-
-同じように、結合荷重 :math:`w_1=0.85` と :math:`w_2=0.85` 、閾値 :math:`θ=0.7`
-とすると、式1と式2を上記の表のそれぞれの値について計算した結果は、以下のように
-なります。
-
-.. csv-table:: 論理和(OR)の計算結果
-	:header: "","式1:( :math:`x_1 w_1)+(x_2 w_2)`","式2:閾値との関係"," :math:`z` "
-	:widths: 10, 10, 10, 10
-	:stub-columns: 1
-
-	"入力1:", :math:`(0*0.85)+(0*0.85)=0.00` , :math:`< 0.7` , :math:`0`
-	"入力2:", :math:`(0*0.85)+(1*0.85)=0.85` , :math:`> 0.7` , :math:`1`
-	"入力3:", :math:`(1*0.85)+(0*0.85)=0.85` , :math:`> 0.7` , :math:`1`
-	"入力4:", :math:`(1*0.85)+(1*0.85)=1.70` , :math:`> 0.7` , :math:`1`
-
-このように、結合荷重を適切に決めることによって、Neural Networkはさまざまな出力を
-得ることができます。この計算例では、シグモイド関数(式3)は省略しましたが、上記の
-閾値と比較する前の計算結果に関数を適用することで、求めることができます。
-
+前述の式(2)の通りに :math:`w` を更新しています。ziに関しては、前段階の
+処理であるForward Propagationの都合で、活性化関数（シグモイド関数）を通した
+値を :math:`z` にセットしていないため、イレギュラー的にここでsigmoid()を
+挟んでいます。一般的にこの部分では、活性化関数を用いませんが、今回のプロ
+グラムでは、 :math:`z` を使用する段階で活性化関数を通すような処理となって
+います。
 
