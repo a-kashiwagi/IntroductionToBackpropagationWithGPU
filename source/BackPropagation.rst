@@ -139,15 +139,20 @@ Backpropagation(誤差逆伝搬)と呼ばれます。誤差値はEで表しま�
 引数や変数の宣言などの計算に付随する処理ですが、LIST 5が誤差信号 :math:`\delta` の
 処理になります。
 
+GPUによる誤差信号 :math:`\delta` の処理
+=======================================
+
+ここでは、nVIDIA GPU用の CUDA C を用いて確率的勾配降下法によるBack
+propagation(誤差逆伝搬)を行う実際のソースコードを示します。
+
 LIST 1. 引数取得
 
 .. code-block:: c
 
 	__global__ void calc_delta(
+					// target phase
 		long trg,
-		long unitk,
-		long unitj,
-		long l_num,
+					// pointer of data memory
 		void *mem
 	){
 
@@ -171,12 +176,25 @@ LIST 2. 変数宣言
 					// number of output side phase
 	long jphase;
 					// number of input side phase
+        long unitk;
+                                        // number of unit k
+        long unitj;
+                                        // number of unit j
 	long j;
-					// counter of j phase
+					// number of j
 
 LIST 3. GPUに関連した処理
 
 .. code-block:: c
+
+					// set neuron instance
+	n = (NEURON_T *)mem;
+					// set phase number
+	jphase = trg + 0;
+	kphase = trg + 1;
+					// set a number of unit
+	unitj = n->z_num[jphase];
+	unitk = n->z_num[kphase];
 
 	tid = blockIdx.x;
 	if(tid > unitj - 1 || tid < 0){
@@ -185,9 +203,10 @@ LIST 3. GPUに関連した処理
 	}
 
 nVIDIA GPU CUDA Cにおける定形処理のようなものですが、実際に実行される
-threadは、jユニットごとに一つとなる為、CUDAが呼び出したthreadが
-jユニットに対応していない場合は、何もせずに処理を返します。詳細は、CUDA C
-のリファレンス等をご参照願います。
+threadは、j層ユニットごとに一つとなる為、CUDAが呼び出したthreadが
+j層ユニットに対応していない場合は、何もせずに処理を返します。また、その
+j層ユニットの数をメモリ領域から取り出すための処理も付随しています。CUDA
+Cの詳細は、リファレンス等をご参照願います。
 
 LIST 4. 直線的なメモリ領域から、jの位置を求める関数
 
@@ -200,20 +219,11 @@ LIST 4. 直線的なメモリ領域から、jの位置を求める関数
 
 こちらも前の項目「汎用GPUにおける結合荷重及び関連値の保持」で述べてい
 る通り、二次元配列であるw(i,j)を直線的な一次元配列へ格納している為、一
-次元配列から二次元配列への変換を行っている。
+次元配列から二次元配列への変換を行っています。
 
 LIST 5. :math:`\delta` の計算
 
 .. code-block:: c
-
-					// set neuron instance
-		n = (NEURON_T *)mem;
-					// set phase number
-		jphase = trg + 0;
-		kphase = trg + 1;
-					// set number of unit
-		unitj = n->z_num[jphase];
-		unitk = n->z_num[kphase];
 
 					// set block id
 		j_cnt = blockIdx.x;
@@ -247,17 +257,21 @@ n->dbは、バイアス :math:`b` の誤差信号 :math:`\delta` です。計算
 力層における :math:`\delta_{k}` の計算処理の具体的なコードは、以下のよ
 うになります。
 
+GPUによる出力層 :math:`\delta` の処理
+=====================================
+
 LIST 6.引数取得
 
 .. code-block:: c
 
 	__global__ void calc_delta_at_out(
+					// target phase
 		long trg,
-		long uniti,
-		long unitj,
-		long l_num,
+					// pointer of data memory
 		void *mem,
+					// teach data
 		double *teach,
+					// length of teach data
 		long teach_num
 	){
 
@@ -273,11 +287,18 @@ LIST 7.変数宣言
 					// Neuron structure
 	long jphase;
 					// number of output phase
+	long unitj;
 
 LIST 8.GPUに関連した処理
 
 .. code-block:: c
 
+	n = (NEURON_T *)mem;
+					// set neuron instance
+	jphase = trg + 1;
+					// set a phase number
+	unitj = n->z_num[jphase];
+					// set a number of unit
 	tid = blockIdx.x;
 	if(tid > unitj - 1 || tid < 0){
 					// check for enable threads
@@ -288,11 +309,6 @@ LIST 9. 出力層における :math:`\delta` の計算
 
 .. code-block:: c
 
-					// set neuron instance
-		n = (NEURON_T *)mem;
-					// set a phase number for i and j
-		jphase = trg + 1;
-					// set pointer for each value
 					// set block id
 		j_cnt = blockIdx.x;
 
@@ -313,15 +329,17 @@ LIST 9. 出力層における :math:`\delta` の計算
 算した各層の :math:`\delta` と式(2)を用いて、各層の結合荷重 :math:`w` 
 を更新します。
 
+GPUによる結合荷重 :math:`w` の更新処理
+======================================
+
 LIST 10.引数取得
 
 .. code-block:: c
 
 	__global__ void calc_delta_w(
+					// target phase
 		long trg,
-		long uniti,
-		long unitj,
-		long l_num,
+					// pointer of data memory
 		void *mem
 	){
 
@@ -349,12 +367,25 @@ LIST 11.変数宣言
 					// number of input phase
 	long jphase;
 					// number of output phase
+	long uniti;
+					// Number of unit i
+	long unitj;
+					// Number of unit j
 	double ETA;
-					// Number of larning rate
+					// Number of learning rate
 
 LIST 12.GPUに関連した処理
 
 .. code-block:: c
+
+					// Set neuron instance
+	n = (NEURON_T *)mem;
+					// Set phase number for i and j
+	iphase = trg + 0;
+	jphase = trg + 1;
+					// Get a phase number
+	uniti = n->z_num[iphase];
+	unitj = n->z_num[jphase];
 
 	tid = blockIdx.x;
 					// Set block ID
@@ -368,12 +399,7 @@ LIST 13. :math:`\delta` による :math:`w` の更新
 
 .. code-block:: c
 
-					// set neuron instance
-		n = (NEURON_T *)mem;
-					// Set phase number for i and j
-		iphase = trg + 0;
-		jphase = trg + 1;
-
+					// Set learning rate
 		ETA = 0.1;
 					// set z pointer
 		 zi = n->z[iphase];
