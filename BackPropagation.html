@@ -1,0 +1,467 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Back Propagation &mdash; IntroductionToBackpropagationWithGPU 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="IntroductionToBackpropagationWithGPU 0.1 documentation" href="index.html" />
+    <link rel="next" title="Train and Inference" href="TrainAndInference.html" />
+    <link rel="prev" title="汎用GPUにおける結合荷重及び関連値の確保と保持" href="AllocateMemory4GPGPU.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="TrainAndInference.html" title="Train and Inference"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="AllocateMemory4GPGPU.html" title="汎用GPUにおける結合荷重及び関連値の確保と保持"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="back-propagation">
+<h1>Back Propagation<a class="headerlink" href="#back-propagation" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">題名:</th><td class="field-body">Deep Learning(Neural Network)における Back propagation(逆伝搬)の解説</td>
+</tr>
+<tr class="field-even field"><th class="field-name">著者:</th><td class="field-body">柏木 明博</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">作成日:</th><td class="field-body">2017年6月20日</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="id1">
+<h2>複数の層を超える誤差の伝搬方法<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<div class="figure align-center" id="id4">
+<img alt="神経細胞とモデル" src="_images/neuron_model.png" />
+<p class="caption"><span class="caption-text">図1.神経細胞とモデル</span></p>
+</div>
+<p>Forward Propagation(順伝搬)では、入力層から出力層に向かって、値と荷重の総和
+を伝搬して行き、出力層で結果を得るものでしたが、それはその時の結合荷重による
+ものでした。Deep Learing(Neural Network)では、学習と言う段階を経て、入力値に
+対応した出力値を憶えさせます。つまり、入力値に対応した出力値が得られるように、
+結合荷重を調整します。Neural Networkは、生物の神経細胞を模倣したものですから、
+結合荷重の調整方法も生物から模倣したいところですが、現在のところ生物がどのよ
+うに結合荷重を調整しているのか、正確なところは判明していません。Neural Netwo
+rkが発見された初期の頃、パーセプトロンと言うモデルが利用されました。これは、
+入力値をForward Propagation(順伝搬)を用いて計算し、得られた結果と、正しい答え
+を比較し、その差分を結合荷重に反映するものです。つまり、正しい答えとの誤差が
+なくなるように結合荷重を調整して行きます。具体的には、下記のようになります。</p>
+<div class="math" id="equation-パーセプトロンの学習方法">
+<span class="eqno">(1)</span>\[w = w + \eta ( t - z ) \cdot z\]\[\eta:学習率\]\[t:教師信号\]\[z:出力値\]\[w:結合荷重\]</div>
+<p>意外に素直な理解が得られるのではないでしょうか。正しい答えと、間違った答えを
+比較して、その誤差を結合荷重に加えて行きます。この方法でも十分有用な利用が可
+能ですが、いくつか問題点も見つかっています。それは、線形な情報にしか対応でき
+ないことと、誤差を複数の層へ伝えられない事です。線形な情報とは、直線でしか分
+離できない情報のことですが、定規で真っ直ぐな線を引いて分離できる情報です。曲
+線を使わないと分離できないような、複雑な情報は正確に対応できません。また、誤
+差を複数の層へ伝えられないとは、上記(1)の式のように誤差は、正しい答えとの差分
+ですから、出力層に置いては正しい答えと現在の出力値を比較することができますが、
+出力層以外の中間層や入力層では、比較ができません。これは、実際の生物の神経細
+胞においても未だ解明されていない仕組みです。しかし、生物の神経細胞も確かに多
+層構造となっており、何らかの伝達物質あるいは、伝達方法があるはずだと言われて
+います。実際、その伝達物質や伝達方法が見つかった、と言うニュースが時々流れて
+いますが、確証されてはいないようです。</p>
+<div class="figure align-center" id="id5">
+<img alt="3 phases neural network" src="_images/Backpropagation.png" />
+<p class="caption"><span class="caption-text">図2. 三層 Neural Network</span></p>
+</div>
+<p>そこで考案されたのが、確率的勾配降下法によるBackpropagation(誤差逆伝搬)です。
+確率的勾配降下法では、上記パーセプトロンによる学習方法と同じように正しい答え
+との誤差を用いて結合荷重を更新して行きますが、更新には誤差に対する結合荷重に
+よる微分値、つまり一階微分ですから、傾きを用いて更新して行きます。傾きがプラ
+ス方向の場合は、結合荷重をマイナス方向へ、傾きがマイナス方向の場合は、結合荷
+重をプラス方向へ更新します。式は、パーセプトロンの学習方法と基本的な考え方は
+変わっておらず、これまでの言葉による説明を式にすると、下記のようになります。</p>
+<div class="math" id="equation-確率的勾配降下法による学習方法">
+<span class="eqno">(2)</span>\[w = w + ( -\epsilon \Delta E )\]\[\epsilon:学習率\]\[E:誤差値\]\[w:結合荷重\]</div>
+<p>そして、この結合荷重の更新を出力層から、入力層に向かって遡ってゆくことから
+Backpropagation(誤差逆伝搬)と呼ばれます。誤差値はEで表しましたが、遡る誤差は、
+誤差信号 <span class="math">\(\delta\)</span> と表し、以下のように計算します。</p>
+<div class="math" id="equation-誤差信号d">
+<span class="eqno">(3)</span>\[\delta_{j} = \sum_{k=1}^{N} \left \{ ( w_{jk} \cdot {\delta}_{k} ) \cdot f'(z_{j}) \right \}\]\[f'(z_{j}) = \{ 1 - f( z_{j} ) \} \cdot f(z_{j})\]\[f:シグモイド関数\]\[f':微分したシグモイド関数\]\[{\delta}_{j}:誤差信号（入力層側）\]\[{\delta}_{k}:誤差信号（出力層側）\]\[z_{j}:前層出力（入力層側）\]\[w_{jk}:結合荷重\]\[N:出力層側のユニット数\]</div>
+<p><span class="math">\(f'\)</span> は、前の項目「Forward Propagation」で解説しているシグモイド関数を
+微分したものです。出力層の <span class="math">\(\delta_{k}\)</span> だけは下記の式によって得ます。
+<span class="math">\(\delta_{j}\)</span> より入力層側の <span class="math">\(\delta\)</span> （図2は三層の為、<span class="math">\(\delta_{i}\)</span>
+から入力層側は使用しません）は、式(3)によって計算します。</p>
+<div class="math" id="equation-出力層の誤差信号d">
+<span class="eqno">(4)</span>\[\delta_{k} = ( z_{k} - t )\]\[z_{k}:出力層出力\]\[t:教師信号\]</div>
+<p>この <span class="math">\(\delta_{k}\)</span> から初めて、中間層の出力層側から順番に入力層側へ <span class="math">\(\delta\)</span>
+を計算して行きます。具体的なコードで表すと、以下のようになります。LIST 1,2,3,4は、
+引数や変数の宣言などの計算に付随する処理ですが、LIST 5が誤差信号 <span class="math">\(\delta\)</span> の
+処理になります。</p>
+</div>
+<div class="section" id="gpu">
+<h2>GPUによる誤差信号 <span class="math">\(\delta\)</span> の処理<a class="headerlink" href="#gpu" title="Permalink to this headline">¶</a></h2>
+<p>ここでは、nVIDIA GPU用の CUDA C を用いて確率的勾配降下法によるBack
+propagation(誤差逆伝搬)を行う実際のソースコードを示します。</p>
+<p>LIST 1. 引数取得</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">__global__</span> <span class="kt">void</span> <span class="nf">calc_delta</span><span class="p">(</span>
+                                <span class="c1">// target phase</span>
+        <span class="kt">long</span> <span class="n">trg</span><span class="p">,</span>
+                                <span class="c1">// pointer of data memory</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">mem</span>
+<span class="p">){</span>
+</pre></div>
+</div>
+<p>LIST 2. 変数宣言</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="kt">int</span> <span class="n">tid</span><span class="p">;</span>
+                                <span class="c1">// thread id</span>
+<span class="kt">long</span> <span class="n">k_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of output side</span>
+<span class="kt">long</span> <span class="n">j_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of input side</span>
+<span class="kt">double</span> <span class="n">ff</span><span class="p">;</span>
+                                <span class="c1">// number of differential s</span>
+<span class="kt">double</span> <span class="n">sum</span><span class="p">;</span>
+                                <span class="c1">// number of summary</span>
+<span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
+                                <span class="c1">// pointer of neuron</span>
+<span class="kt">long</span> <span class="n">kphase</span><span class="p">;</span>
+                                <span class="c1">// number of output side phase</span>
+<span class="kt">long</span> <span class="n">jphase</span><span class="p">;</span>
+                                <span class="c1">// number of input side phase</span>
+<span class="kt">long</span> <span class="n">unitk</span><span class="p">;</span>
+                                <span class="c1">// number of unit k</span>
+<span class="kt">long</span> <span class="n">unitj</span><span class="p">;</span>
+                                <span class="c1">// number of unit j</span>
+<span class="kt">long</span> <span class="n">j</span><span class="p">;</span>
+                                <span class="c1">// number of j</span>
+</pre></div>
+</div>
+<p>LIST 3. GPUに関連した処理</p>
+<div class="highlight-c"><div class="highlight"><pre>                                <span class="c1">// set neuron instance</span>
+<span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">NEURON_T</span> <span class="o">*</span><span class="p">)</span><span class="n">mem</span><span class="p">;</span>
+                                <span class="c1">// set phase number</span>
+<span class="n">jphase</span> <span class="o">=</span> <span class="n">trg</span> <span class="o">+</span> <span class="mi">0</span><span class="p">;</span>
+<span class="n">kphase</span> <span class="o">=</span> <span class="n">trg</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+                                <span class="c1">// set a number of unit</span>
+<span class="n">unitj</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z_num</span><span class="p">[</span><span class="n">jphase</span><span class="p">];</span>
+<span class="n">unitk</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z_num</span><span class="p">[</span><span class="n">kphase</span><span class="p">];</span>
+
+<span class="n">tid</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<span class="k">if</span><span class="p">(</span><span class="n">tid</span> <span class="o">&gt;</span> <span class="n">unitj</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">||</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">){</span>
+                                <span class="c1">// check for enable threads</span>
+        <span class="k">return</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>nVIDIA GPU CUDA Cにおける定形処理のようなものですが、実際に実行される
+threadは、j層ユニットごとに一つとなる為、CUDAが呼び出したthreadが
+j層ユニットに対応していない場合は、何もせずに処理を返します。また、その
+j層ユニットの数をメモリ領域から取り出すための処理も付随しています。CUDA
+Cの詳細は、リファレンス等をご参照願います。</p>
+<p>LIST 4. 直線的なメモリ領域から、jの位置を求める関数</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">__device__</span> <span class="n">__host__</span> <span class="kt">long</span> <span class="nf">calcj</span><span class="p">(</span> <span class="kt">long</span> <span class="n">j</span><span class="p">,</span> <span class="kt">long</span> <span class="n">jmax</span><span class="p">,</span> <span class="kt">long</span> <span class="n">k</span> <span class="p">){</span>
+
+        <span class="k">return</span> <span class="n">j</span> <span class="o">+</span> <span class="p">(</span><span class="n">jmax</span> <span class="o">*</span> <span class="n">k</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>こちらも前の項目「汎用GPUにおける結合荷重及び関連値の保持」で述べてい
+る通り、二次元配列であるw(i,j)を直線的な一次元配列へ格納している為、一
+次元配列から二次元配列への変換を行っています。</p>
+<p>LIST 5. <span class="math">\(\delta\)</span> の計算</p>
+<div class="highlight-c"><div class="highlight"><pre>                        <span class="c1">// set block id</span>
+<span class="n">j_cnt</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+
+<span class="k">if</span><span class="p">(</span><span class="n">j_cnt</span> <span class="o">&lt;</span> <span class="n">unitj</span><span class="p">){</span>
+                        <span class="c1">// calculate forward</span>
+        <span class="n">sum</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+        <span class="n">ff</span> <span class="o">=</span> <span class="n">differented_sigmoid</span><span class="p">(</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span> <span class="p">);</span>
+
+        <span class="k">for</span><span class="p">(</span> <span class="n">k_cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">k_cnt</span> <span class="o">&lt;</span> <span class="n">unitk</span><span class="p">;</span> <span class="n">k_cnt</span><span class="o">++</span> <span class="p">){</span>
+
+                <span class="n">j</span> <span class="o">=</span> <span class="n">calcj</span><span class="p">(</span> <span class="n">j_cnt</span><span class="p">,</span> <span class="n">unitj</span><span class="p">,</span> <span class="n">k_cnt</span> <span class="p">);</span>
+
+                <span class="n">sum</span> <span class="o">+=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">w</span><span class="p">[</span><span class="n">kphase</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">d</span><span class="p">[</span><span class="n">kphase</span><span class="p">][</span><span class="n">k_cnt</span><span class="p">]</span> <span class="o">*</span> <span class="n">ff</span><span class="p">;</span>
+        <span class="p">}</span>
+
+        <span class="n">n</span><span class="o">-&gt;</span><span class="n">d</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">sum</span><span class="p">;</span>
+
+        <span class="n">n</span><span class="o">-&gt;</span><span class="n">db</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span>
+                <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">db</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">*</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">b</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">*</span> <span class="n">ff</span><span class="p">;</span>
+<span class="p">}</span>
+                        <span class="c1">// Normal return</span>
+<span class="k">return</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>LIST 6. シグモイド関数とその微分関数</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">__device__</span> <span class="kt">double</span> <span class="nf">sigmoid</span><span class="p">(</span> <span class="kt">double</span> <span class="n">x</span> <span class="p">){</span>
+
+        <span class="k">return</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">exp</span><span class="p">(</span> <span class="o">-</span><span class="mi">1</span> <span class="o">*</span> <span class="n">x</span> <span class="o">*</span> <span class="n">SIGMOID_ALPHA</span> <span class="p">));</span>
+<span class="p">}</span>
+
+<span class="n">__device__</span> <span class="kt">double</span> <span class="nf">differented_sigmoid</span><span class="p">(</span> <span class="kt">double</span> <span class="n">x</span> <span class="p">){</span>
+
+        <span class="k">return</span> <span class="n">sigmoid</span><span class="p">(</span> <span class="n">x</span> <span class="p">)</span> <span class="o">*</span> <span class="p">(</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">sigmoid</span><span class="p">(</span> <span class="n">x</span> <span class="p">)</span> <span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>計算方法は先述の通りですが、構造体要素に付いている配列添え字は、例えば
+n-&gt;z[jphase][j_cnt] の場合、jphase層のj_cntユニットのz値を表しています。
+n-&gt;dbは、バイアス <span class="math">\(b\)</span> の誤差信号 <span class="math">\(\delta\)</span> です。計算方法は
+同じで、各ユニットに一つずつしか無いため、総和は取りません。同様に、 出
+力層における <span class="math">\(\delta_{k}\)</span> の計算処理の具体的なコードは、以下のよ
+うになります。</p>
+</div>
+<div class="section" id="id2">
+<h2>GPUによる出力層 <span class="math">\(\delta\)</span> の処理<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+<p>LIST 7.引数取得</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">__global__</span> <span class="kt">void</span> <span class="nf">calc_delta_at_out</span><span class="p">(</span>
+                                <span class="c1">// target phase</span>
+        <span class="kt">long</span> <span class="n">trg</span><span class="p">,</span>
+                                <span class="c1">// pointer of data memory</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">mem</span><span class="p">,</span>
+                                <span class="c1">// teach data</span>
+        <span class="kt">double</span> <span class="o">*</span><span class="n">teach</span><span class="p">,</span>
+                                <span class="c1">// length of teach data</span>
+        <span class="kt">long</span> <span class="n">teach_num</span>
+<span class="p">){</span>
+</pre></div>
+</div>
+<p>LIST 8.変数宣言</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="kt">int</span> <span class="n">tid</span><span class="p">;</span>
+                                <span class="c1">// thread id</span>
+<span class="kt">long</span> <span class="n">j_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of output side</span>
+<span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
+                                <span class="c1">// Neuron structure</span>
+<span class="kt">long</span> <span class="n">jphase</span><span class="p">;</span>
+                                <span class="c1">// number of output phase</span>
+<span class="kt">long</span> <span class="n">unitj</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>LIST 9.GPUに関連した処理</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">NEURON_T</span> <span class="o">*</span><span class="p">)</span><span class="n">mem</span><span class="p">;</span>
+                                <span class="c1">// set neuron instance</span>
+<span class="n">jphase</span> <span class="o">=</span> <span class="n">trg</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+                                <span class="c1">// set a phase number</span>
+<span class="n">unitj</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z_num</span><span class="p">[</span><span class="n">jphase</span><span class="p">];</span>
+                                <span class="c1">// set a number of unit</span>
+<span class="n">tid</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+<span class="k">if</span><span class="p">(</span><span class="n">tid</span> <span class="o">&gt;</span> <span class="n">unitj</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">||</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">){</span>
+                                <span class="c1">// check for enable threads</span>
+        <span class="k">return</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>LIST 10. 出力層における <span class="math">\(\delta\)</span> の計算</p>
+<div class="highlight-c"><div class="highlight"><pre>                        <span class="c1">// set block id</span>
+<span class="n">j_cnt</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+
+<span class="k">if</span><span class="p">(</span><span class="n">j_cnt</span> <span class="o">&lt;</span> <span class="n">unitj</span><span class="p">){</span>
+                        <span class="c1">// calculate forward</span>
+        <span class="n">n</span><span class="o">-&gt;</span><span class="n">d</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span>
+                <span class="o">=</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">n</span><span class="o">-&gt;</span><span class="n">z</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">])</span>
+                <span class="o">-</span> <span class="n">teach</span><span class="p">[(</span><span class="n">unitj</span> <span class="o">*</span> <span class="n">teach_num</span><span class="p">)</span> <span class="o">+</span> <span class="n">j_cnt</span><span class="p">];</span>
+
+        <span class="n">n</span><span class="o">-&gt;</span><span class="n">db</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">d</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">j_cnt</span><span class="p">];</span>
+<span class="p">}</span>
+                        <span class="c1">// Normal return</span>
+<span class="k">return</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>プログラムの構造は、前述の中間層における <span class="math">\(\delta\)</span> と同じです。
+引数に教師信号teachとその数teach_numを受け取っています。こうして計
+算した各層の <span class="math">\(\delta\)</span> と式(2)を用いて、各層の結合荷重 <span class="math">\(w\)</span>
+を更新します。</p>
+</div>
+<div class="section" id="id3">
+<h2>GPUによる結合荷重 <span class="math">\(w\)</span> の更新処理<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
+<p>LIST 11.引数取得</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">__global__</span> <span class="kt">void</span> <span class="nf">calc_delta_w</span><span class="p">(</span>
+                                <span class="c1">// target phase</span>
+        <span class="kt">long</span> <span class="n">trg</span><span class="p">,</span>
+                                <span class="c1">// pointer of data memory</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">mem</span>
+<span class="p">){</span>
+</pre></div>
+</div>
+<p>LIST 12.変数宣言</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="kt">int</span> <span class="n">tid</span><span class="p">;</span>
+                                <span class="c1">// thread id</span>
+<span class="kt">long</span> <span class="n">i_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of input side</span>
+<span class="kt">long</span> <span class="n">j_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of output side</span>
+<span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
+                                <span class="c1">// neuron structure</span>
+<span class="kt">double</span> <span class="o">*</span><span class="n">zi</span><span class="p">;</span>
+                                <span class="c1">// Pointer of d at j side</span>
+<span class="kt">double</span> <span class="o">*</span><span class="n">dj</span><span class="p">;</span>
+                                <span class="c1">// Pointer of b at j side</span>
+<span class="kt">double</span> <span class="o">*</span><span class="n">bj</span><span class="p">;</span>
+                                <span class="c1">// Pointer of db at j side</span>
+<span class="kt">double</span> <span class="o">*</span><span class="n">dbj</span><span class="p">;</span>
+                                <span class="c1">// pointer of  input side z</span>
+<span class="kt">long</span> <span class="n">iphase</span><span class="p">;</span>
+                                <span class="c1">// number of input phase</span>
+<span class="kt">long</span> <span class="n">jphase</span><span class="p">;</span>
+                                <span class="c1">// number of output phase</span>
+<span class="kt">long</span> <span class="n">uniti</span><span class="p">;</span>
+                                <span class="c1">// Number of unit i</span>
+<span class="kt">long</span> <span class="n">unitj</span><span class="p">;</span>
+                                <span class="c1">// Number of unit j</span>
+<span class="kt">double</span> <span class="n">ETA</span><span class="p">;</span>
+                                <span class="c1">// Number of learning rate</span>
+</pre></div>
+</div>
+<p>LIST 13.GPUに関連した処理</p>
+<div class="highlight-c"><div class="highlight"><pre>                                <span class="c1">// Set neuron instance</span>
+<span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">NEURON_T</span> <span class="o">*</span><span class="p">)</span><span class="n">mem</span><span class="p">;</span>
+                                <span class="c1">// Set phase number for i and j</span>
+<span class="n">iphase</span> <span class="o">=</span> <span class="n">trg</span> <span class="o">+</span> <span class="mi">0</span><span class="p">;</span>
+<span class="n">jphase</span> <span class="o">=</span> <span class="n">trg</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+                                <span class="c1">// Get a phase number</span>
+<span class="n">uniti</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z_num</span><span class="p">[</span><span class="n">iphase</span><span class="p">];</span>
+<span class="n">unitj</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z_num</span><span class="p">[</span><span class="n">jphase</span><span class="p">];</span>
+
+<span class="n">tid</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+                                <span class="c1">// Set block ID</span>
+
+<span class="k">if</span><span class="p">(</span><span class="n">tid</span> <span class="o">&gt;</span> <span class="n">unitj</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">||</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">){</span>
+                                <span class="c1">// check for enable threads</span>
+        <span class="k">return</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>LIST 14. <span class="math">\(\delta\)</span> による <span class="math">\(w\)</span> の更新</p>
+<div class="highlight-c"><div class="highlight"><pre>                        <span class="c1">// Set learning rate</span>
+<span class="n">ETA</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">;</span>
+                        <span class="c1">// set z pointer</span>
+ <span class="n">zi</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">z</span><span class="p">[</span><span class="n">iphase</span><span class="p">];</span>
+ <span class="n">dj</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">d</span><span class="p">[</span><span class="n">jphase</span><span class="p">];</span>
+ <span class="n">bj</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">b</span><span class="p">[</span><span class="n">jphase</span><span class="p">];</span>
+<span class="n">dbj</span> <span class="o">=</span> <span class="n">n</span><span class="o">-&gt;</span><span class="n">db</span><span class="p">[</span><span class="n">jphase</span><span class="p">];</span>
+                        <span class="c1">// set block id</span>
+<span class="n">j_cnt</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+
+<span class="k">if</span><span class="p">(</span><span class="n">j_cnt</span> <span class="o">&lt;</span> <span class="n">unitj</span><span class="p">){</span>
+                        <span class="c1">// calculate w</span>
+
+        <span class="k">for</span><span class="p">(</span> <span class="n">i_cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i_cnt</span> <span class="o">&lt;</span> <span class="n">uniti</span><span class="p">;</span> <span class="n">i_cnt</span><span class="o">++</span> <span class="p">){</span>
+
+                <span class="n">n</span><span class="o">-&gt;</span><span class="n">w</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">i_cnt</span> <span class="o">+</span> <span class="p">(</span><span class="n">uniti</span> <span class="o">*</span> <span class="n">j_cnt</span><span class="p">)]</span>
+                        <span class="o">-=</span> <span class="p">(</span> <span class="n">dj</span><span class="p">[</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">*</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">zi</span><span class="p">[</span><span class="n">i_cnt</span><span class="p">])</span> <span class="p">)</span> <span class="o">*</span> <span class="n">ETA</span><span class="p">;</span>
+        <span class="p">}</span>
+
+        <span class="n">bj</span><span class="p">[</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">-=</span> <span class="n">dbj</span><span class="p">[</span><span class="n">j_cnt</span><span class="p">]</span> <span class="o">*</span> <span class="n">ETA</span><span class="p">;</span>
+
+<span class="p">}</span>
+                        <span class="c1">// Normal terminate</span>
+<span class="k">return</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>前述の式(2)の通りに <span class="math">\(w\)</span> を更新しています。ziに関しては、前段階の処
+理であるForward Propagationの都合で、活性化関数（シグモイド関数）を通した
+値を <span class="math">\(z\)</span> にセットしていないため、イレギュラー的にここでsigmoid()を
+挟んでいます。一般的にこの部分では、活性化関数を用いませんが、今回のプロ
+グラムでは、 <span class="math">\(z\)</span> を使用する段階で活性化関数を通すような処理となって
+います。</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Back Propagation</a><ul>
+<li><a class="reference internal" href="#id1">複数の層を超える誤差の伝搬方法</a></li>
+<li><a class="reference internal" href="#gpu">GPUによる誤差信号 <span class="math">\(\delta\)</span> の処理</a></li>
+<li><a class="reference internal" href="#id2">GPUによる出力層 <span class="math">\(\delta\)</span> の処理</a></li>
+<li><a class="reference internal" href="#id3">GPUによる結合荷重 <span class="math">\(w\)</span> の更新処理</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="AllocateMemory4GPGPU.html"
+                        title="previous chapter">汎用GPUにおける結合荷重及び関連値の確保と保持</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="TrainAndInference.html"
+                        title="next chapter">Train and Inference</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/BackPropagation.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="TrainAndInference.html" title="Train and Inference"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="AllocateMemory4GPGPU.html" title="汎用GPUにおける結合荷重及び関連値の確保と保持"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2017, Akihiro Kashiwagi.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.6.
+    </div>
+  </body>
+</html>
