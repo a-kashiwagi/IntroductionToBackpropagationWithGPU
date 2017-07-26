@@ -8,7 +8,7 @@
     
     <title>汎用GPUにおける結合荷重及び関連値の確保と保持 &mdash; IntroductionToBackpropagationWithGPU 0.1 documentation</title>
     
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     
     <script type="text/javascript">
@@ -23,13 +23,13 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="top" title="IntroductionToBackpropagationWithGPU 0.1 documentation" href="index.html" />
     <link rel="next" title="Back Propagation" href="BackPropagation.html" />
     <link rel="prev" title="Forward Propagation" href="ForwardPropagation.html" /> 
   </head>
-  <body>
-    <div class="related">
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -41,14 +41,14 @@
         <li class="right" >
           <a href="ForwardPropagation.html" title="Forward Propagation"
              accesskey="P">previous</a> |</li>
-        <li><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
-          <div class="body">
+          <div class="body" role="main">
             
   <div class="section" id="gpu">
 <h1>汎用GPUにおける結合荷重及び関連値の確保と保持<a class="headerlink" href="#gpu" title="Permalink to this headline">¶</a></h1>
@@ -96,7 +96,7 @@
 <p>一覧表1に挙げた各要素に必要なメモリ領域を加算し、合計値でmalloc()する事で、
 連続した領域を確保します。具体的なコードで示すと、以下のようにります。</p>
 <p>LIST 1. NEUTON_T構造体</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span>                                <span class="c1">// Neuron structure</span>
+<div class="highlight-cpp"><div class="highlight"><pre>                                <span class="c1">// Neuron structure</span>
 <span class="k">typedef</span> <span class="k">struct</span> <span class="n">neuron_t</span><span class="p">{</span>
 
         <span class="kt">double</span> <span class="o">**</span><span class="n">z</span><span class="p">;</span>
@@ -122,22 +122,38 @@
 <span class="p">}</span> <span class="n">NEURON_T</span><span class="p">;</span>
 </pre></div>
 </div>
-<p>LIST 2. 変数宣言</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span><span class="n">cudaError_t</span> <span class="n">err</span><span class="p">;</span>
+<p>LIST 2. 引数と変数宣言</p>
+<div class="highlight-cpp"><div class="highlight"><pre><span class="kt">long</span> <span class="nf">alloc_mem</span><span class="p">(</span>
+          <span class="kt">long</span>  <span class="n">l_num</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="o">*</span><span class="n">z_num</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="o">*</span><span class="n">b_num</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="o">*</span><span class="n">w_num</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="o">*</span><span class="n">d_num</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="o">*</span><span class="n">db_num</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">**</span><span class="n">mem_cpu</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">**</span><span class="n">mem_dev</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">**</span><span class="n">train_cpu</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">**</span><span class="n">train_dev</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="n">train_num</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">**</span><span class="n">teach_cpu</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">**</span><span class="n">teach_dev</span><span class="p">,</span>
+          <span class="kt">long</span> <span class="n">teach_num</span>
+<span class="p">){</span>
+        <span class="n">cudaError_t</span> <span class="n">err</span><span class="p">;</span>
                                 <span class="c1">// Error code of cuda</span>
-<span class="kt">long</span> <span class="n">phase</span><span class="p">;</span>
+        <span class="kt">long</span> <span class="n">phase</span><span class="p">;</span>
                                 <span class="c1">// Number of phase</span>
-<span class="kt">long</span> <span class="n">size</span><span class="p">;</span>
+        <span class="kt">long</span> <span class="n">size</span><span class="p">;</span>
                                 <span class="c1">// Size of memory</span>
-<span class="kt">long</span> <span class="n">cur</span><span class="p">;</span>
+        <span class="kt">long</span> <span class="n">cur</span><span class="p">;</span>
                                 <span class="c1">// Cursor</span>
-<span class="kt">long</span> <span class="o">*</span><span class="n">mem_cpu_p</span><span class="p">;</span>
+        <span class="kt">long</span> <span class="o">*</span><span class="n">mem_cpu_p</span><span class="p">;</span>
 
-<span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
+        <span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
 </pre></div>
 </div>
 <p>LIST 3. サイズ計算</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span>                                <span class="c1">// Long type pointer of cpu side memory</span>
+<div class="highlight-cpp"><div class="highlight"><pre>                                <span class="c1">// Long type pointer of cpu side memory</span>
 <span class="n">size</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
                                 <span class="c1">// Init value of size</span>
 
@@ -166,7 +182,7 @@
 <span class="math">\(z,b,w,d,db\)</span> の数を保存する為のサイズを確保し、 <span class="math">\(z,b,w,d,db\)</span> の実際
 の値を保存するサイズを加算します。</p>
 <p>LIST 4. メモリ確保</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span><span class="o">*</span><span class="n">mem_cpu</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span> <span class="n">size</span> <span class="p">);</span>
+<div class="highlight-cpp"><div class="highlight"><pre><span class="o">*</span><span class="n">mem_cpu</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span> <span class="n">size</span> <span class="p">);</span>
                                 <span class="c1">// Memory allocate at CPU</span>
 <span class="k">if</span><span class="p">(</span> <span class="n">mem_cpu</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="p">){</span>
         <span class="k">return</span><span class="p">(</span> <span class="o">-</span><span class="mi">1</span> <span class="p">);</span>
@@ -183,21 +199,113 @@
 域を確保します。連続した領域は、一覧表1の先頭「1.構造体への保持用領域」の要
 素である各値へのポインタへ再割り当てすることで、使用可能となります。再割り当
 て処理は、汎用GPU上においても、CPU上でも同様です。</p>
+<p>LIST 4.1は、このセクションでは必要ありませんが、後の項である「Back Propagation
+」で必要になってくるため、ここで挙げておきます。</p>
+<p>LIST 4.1. その他のメモリの確保</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="o">*</span><span class="n">train_cpu</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span>
+        <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">train_num</span>
+<span class="p">);</span>
+                                <span class="c1">// Train memory allocate at CPU</span>
+<span class="k">if</span><span class="p">(</span> <span class="n">train_cpu</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="p">){</span>
+        <span class="k">return</span><span class="p">(</span> <span class="o">-</span><span class="mi">3</span> <span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">err</span> <span class="o">=</span> <span class="n">cudaMalloc</span><span class="p">(</span> <span class="p">(</span><span class="kt">void</span><span class="o">**</span><span class="p">)</span><span class="o">&amp;</span><span class="p">(</span><span class="o">*</span><span class="n">train_dev</span><span class="p">),</span>
+        <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">train_num</span>
+<span class="p">);</span>
+                                <span class="c1">// Train memory allocate at GPU</span>
+<span class="k">if</span><span class="p">(</span> <span class="n">err</span> <span class="o">!=</span> <span class="n">cudaSuccess</span><span class="p">){</span>
+        <span class="k">return</span><span class="p">(</span> <span class="o">-</span><span class="mi">4</span> <span class="p">);</span>
+<span class="p">}</span>
+
+<span class="o">*</span><span class="n">teach_cpu</span> <span class="o">=</span> <span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span>
+        <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="n">l_num</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">teach_num</span>
+<span class="p">);</span>
+                                <span class="c1">// Teach memory allocate at CPU</span>
+<span class="k">if</span><span class="p">(</span> <span class="n">teach_cpu</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="p">){</span>
+        <span class="k">return</span><span class="p">(</span> <span class="o">-</span><span class="mi">5</span> <span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">err</span> <span class="o">=</span> <span class="n">cudaMalloc</span><span class="p">(</span> <span class="p">(</span><span class="kt">void</span><span class="o">**</span><span class="p">)</span><span class="o">&amp;</span><span class="p">(</span><span class="o">*</span><span class="n">teach_dev</span><span class="p">),</span>
+        <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="n">l_num</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">teach_num</span>
+<span class="p">);</span>
+                                <span class="c1">// Teach memory allocate at GPU</span>
+<span class="k">if</span><span class="p">(</span> <span class="n">err</span> <span class="o">!=</span> <span class="n">cudaSuccess</span><span class="p">){</span>
+        <span class="k">return</span><span class="p">(</span> <span class="o">-</span><span class="mi">6</span> <span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>始めに述べた「一覧表1.データ構造」のNo.2からNo.6は、モデルの層数とz,b,w,d,db
+各値の層ごとの数を格納する領域となっています。ここでは、その値を設定します。</p>
+<p>LIST 5. 層数と各値の数の格納</p>
+<div class="highlight-c"><div class="highlight"><pre>                                <span class="c1">// Init a cursor</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">NEURON_T</span> <span class="o">*</span><span class="p">)</span><span class="o">*</span><span class="n">mem_cpu</span><span class="p">;</span>
+<span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// Store a pointer address</span>
+                                <span class="c1">// mem_cpu_p = (long *)*mem_cpu;</span>
+<span class="n">mem_cpu_p</span> <span class="o">=</span> <span class="p">(</span><span class="kt">long</span> <span class="o">*</span><span class="p">)</span><span class="o">&amp;</span><span class="n">n</span><span class="p">[</span><span class="n">cur</span><span class="p">];</span>
+                                <span class="c1">// Init a cursor</span>
+<span class="n">cur</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+                                <span class="c1">// Set number of phases</span>
+<span class="n">mem_cpu_p</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span> <span class="o">=</span> <span class="n">l_num</span><span class="p">;</span>
+<span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// Set number of each array</span>
+<span class="k">for</span><span class="p">(</span><span class="n">phase</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">phase</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="p">;</span> <span class="n">phase</span><span class="o">++</span><span class="p">){</span>
+
+        <span class="n">mem_cpu_p</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="n">phase</span><span class="p">];</span>
+        <span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// For z_num</span>
+<span class="p">}</span>
+
+<span class="k">for</span><span class="p">(</span><span class="n">phase</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">phase</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="p">;</span> <span class="n">phase</span><span class="o">++</span><span class="p">){</span>
+
+        <span class="n">mem_cpu_p</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span> <span class="o">=</span> <span class="n">b_num</span><span class="p">[</span><span class="n">phase</span><span class="p">];</span>
+        <span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// For b_num</span>
+<span class="p">}</span>
+
+<span class="k">for</span><span class="p">(</span><span class="n">phase</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">phase</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="p">;</span> <span class="n">phase</span><span class="o">++</span><span class="p">){</span>
+
+        <span class="n">mem_cpu_p</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span> <span class="o">=</span> <span class="n">w_num</span><span class="p">[</span><span class="n">phase</span><span class="p">];</span>
+        <span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// For w_num</span>
+<span class="p">}</span>
+
+<span class="k">for</span><span class="p">(</span><span class="n">phase</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">phase</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="p">;</span> <span class="n">phase</span><span class="o">++</span><span class="p">){</span>
+
+        <span class="n">mem_cpu_p</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span> <span class="o">=</span> <span class="n">d_num</span><span class="p">[</span><span class="n">phase</span><span class="p">];</span>
+        <span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// For d_num</span>
+<span class="p">}</span>
+
+<span class="k">for</span><span class="p">(</span><span class="n">phase</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">phase</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="p">;</span> <span class="n">phase</span><span class="o">++</span><span class="p">){</span>
+
+        <span class="n">mem_cpu_p</span><span class="p">[</span><span class="n">cur</span><span class="p">]</span> <span class="o">=</span> <span class="n">db_num</span><span class="p">[</span><span class="n">phase</span><span class="p">];</span>
+        <span class="n">cur</span><span class="o">++</span><span class="p">;</span>
+                                <span class="c1">// For db_num</span>
+<span class="p">}</span>
+
+<span class="k">return</span> <span class="n">size</span><span class="p">;</span>
+                                <span class="c1">// Normal Terminate</span>
+</pre></div>
+</div>
 </div>
 <div class="section" id="id2">
 <h2>構造体への再割当て<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
 <p>各種計算用関数から利用し易いように、構造体への再割り当てを行います。再割り当
 ては、上記「一覧表1.構造体要素」を再計算し、それぞれの保持領域への先頭アドレ
 スを「1.構造体への保持用領域」の要素である各値へのポインタへ格納し直します。</p>
-<p>LIST 5. 引数の取得</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span><span class="n">__device__</span> <span class="n">__host__</span> <span class="n">NEURON_T</span> <span class="o">*</span><span class="nf">set_instance</span><span class="p">(</span>
+<p>LIST 6. 引数の取得</p>
+<div class="highlight-cpp"><div class="highlight"><pre><span class="n">__device__</span> <span class="n">__host__</span> <span class="n">NEURON_T</span> <span class="o">*</span><span class="nf">set_instance</span><span class="p">(</span>
         <span class="kt">long</span>    <span class="n">l_num</span><span class="p">,</span>
         <span class="kt">void</span> <span class="o">**</span><span class="n">mem</span>
 <span class="p">){</span>
 </pre></div>
 </div>
-<p>LIST 6. 変数宣言</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span><span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
+<p>LIST 7. 変数宣言</p>
+<div class="highlight-cpp"><div class="highlight"><pre><span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
                                 <span class="c1">// Pointer of liner memory for long</span>
 <span class="kt">long</span> <span class="o">*</span><span class="n">mem_long</span><span class="p">;</span>
                                 <span class="c1">// Pointer of liner memory for double</span>
@@ -208,8 +316,8 @@
 <span class="kt">long</span> <span class="n">phase</span><span class="p">;</span>
 </pre></div>
 </div>
-<p>LIST 7. メモリ領域の確保</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span>                                <span class="c1">// Init a length at each phase</span>
+<p>LIST 8. メモリ領域の確保</p>
+<div class="highlight-cpp"><div class="highlight"><pre>                                <span class="c1">// Init a length at each phase</span>
 <span class="n">phase_len</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
                                 <span class="c1">// Set address of top</span>
 <span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">NEURON_T</span> <span class="o">*</span><span class="p">)</span><span class="o">*</span><span class="n">mem</span><span class="p">;</span>
@@ -229,8 +337,8 @@
 <span class="n">n</span><span class="o">-&gt;</span><span class="n">db</span> <span class="o">=</span> <span class="p">(</span><span class="kt">double</span><span class="o">**</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="o">*</span><span class="p">)</span> <span class="o">*</span> <span class="n">l_num</span><span class="p">);</span>
 </pre></div>
 </div>
-<p>LIST 8. メモリアドレスのポインタへの再割当て</p>
-<div class="highlight-cpp"><div class="highlight"><pre><span></span>                                <span class="c1">// Set pointer address</span>
+<p>LIST 9. メモリアドレスのポインタへの再割当て</p>
+<div class="highlight-cpp"><div class="highlight"><pre>                                <span class="c1">// Set pointer address</span>
                                 <span class="c1">//                 for long array again</span>
 <span class="n">mem_long</span> <span class="o">=</span> <span class="p">(</span><span class="kt">long</span> <span class="o">*</span><span class="p">)</span><span class="o">&amp;</span><span class="n">n</span><span class="p">[</span><span class="n">phase_len</span><span class="p">];</span>
                                 <span class="c1">//mem_long = (long *)*mem;</span>
@@ -344,7 +452,7 @@ long型の為、わざわざポインタをキャストしてlong型として取
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar">
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
@@ -361,12 +469,14 @@ long型の為、わざわざポインタをキャストしてlong型として取
   <h4>Next topic</h4>
   <p class="topless"><a href="BackPropagation.html"
                         title="next chapter">Back Propagation</a></p>
-  <h3>This Page</h3>
-  <ul class="this-page-menu">
-    <li><a href="_sources/AllocateMemory4GPGPU.txt"
-           rel="nofollow">Show Source</a></li>
-  </ul>
-<div id="searchbox" style="display: none">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/AllocateMemory4GPGPU.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
     <form class="search" action="search.html" method="get">
       <input type="text" name="q" />
@@ -383,7 +493,7 @@ long型の為、わざわざポインタをキャストしてlong型として取
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related">
+    <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -395,12 +505,12 @@ long型の為、わざわざポインタをキャストしてlong型として取
         <li class="right" >
           <a href="ForwardPropagation.html" title="Forward Propagation"
              >previous</a> |</li>
-        <li><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
       </ul>
     </div>
-    <div class="footer">
+    <div class="footer" role="contentinfo">
         &copy; Copyright 2017, Akihiro Kashiwagi.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.6.
     </div>
   </body>
 </html>

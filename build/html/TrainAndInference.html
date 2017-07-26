@@ -1,0 +1,578 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Train and Inference &mdash; IntroductionToBackpropagationWithGPU 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="top" title="IntroductionToBackpropagationWithGPU 0.1 documentation" href="index.html" />
+    <link rel="prev" title="Back Propagation" href="BackPropagation.html" /> 
+  </head>
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="BackPropagation.html" title="Back Propagation"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="train-and-inference">
+<h1>Train and Inference<a class="headerlink" href="#train-and-inference" title="Permalink to this headline">¶</a></h1>
+<table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">題名:</th><td class="field-body">訓練(train)と推論(inference)の解説</td>
+</tr>
+<tr class="field-even field"><th class="field-name">著者:</th><td class="field-body">柏木 明博</td>
+</tr>
+<tr class="field-odd field"><th class="field-name">作成日:</th><td class="field-body">2017年7月24日</td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="train">
+<h2>訓練(train)<a class="headerlink" href="#train" title="Permalink to this headline">¶</a></h2>
+<p>これまで、Forwardpropagation、Backpropagation、GPUの使い方を解説しましたが、
+ここでは、それらを組み合わせて訓練(train)と推論(inference)を行います。訓練
+がBackpropagation、推論がForwardpropagationとなりますが、推論した結果と正し
+答えとの誤差を学習するため、推論 &#8211;&gt; 訓練の順番で処理を行います。</p>
+<div class="figure align-center" id="id8">
+<img alt="訓練と推論" src="_images/train_and_inference.png" />
+<p class="caption"><span class="caption-text">図1.訓練(train)と推論(inference)</span></p>
+</div>
+</div>
+<div class="section" id="id1">
+<h2>フローチャート<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
+<div class="figure align-center" id="id9">
+<img alt="flow chart" src="_images/flowchart.png" />
+<p class="caption"><span class="caption-text">図2.全体の流れ</span></p>
+</div>
+</div>
+<div class="section" id="id2">
+<h2>変数宣言<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h2>
+<p>まずは、変数宣言部分です。入力層、中間層、出力層の3層のバックプロパゲーショ
+ンとなるため、z,b,w,d,db、各3要素づつ確保しています。また、入力層は2ユニット、
+中間層は7ユニット、出力層は2ユニットとなります。</p>
+<p>LIST 1. 変数宣言</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span> <span class="o">*</span><span class="n">argv</span><span class="p">[]){</span>
+                                <span class="c1">// Error of cuda</span>
+        <span class="n">cudaError_t</span> <span class="n">err</span><span class="p">;</span>
+                                <span class="c1">// Size of data</span>
+        <span class="kt">long</span> <span class="n">size</span><span class="p">;</span>
+                                <span class="c1">// Number of phase this network</span>
+        <span class="kt">long</span> <span class="n">l_num</span><span class="p">;</span>
+                                <span class="c1">// Number of z at each phase</span>
+        <span class="kt">long</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+                                <span class="c1">// Number of b at each phase</span>
+        <span class="kt">long</span> <span class="n">b_num</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+                                <span class="c1">// Number of w at each phase</span>
+        <span class="kt">long</span> <span class="n">w_num</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+                                <span class="c1">// Number of d at each phase</span>
+        <span class="kt">long</span> <span class="n">d_num</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+                                <span class="c1">// Number of db at each phase</span>
+        <span class="kt">long</span> <span class="n">db_num</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
+                                <span class="c1">// Memory pointer at cpu side</span>
+        <span class="kt">long</span> <span class="n">train_num</span><span class="p">;</span>
+                                <span class="c1">// Number of train row</span>
+        <span class="kt">long</span> <span class="n">teach_num</span><span class="p">;</span>
+                                <span class="c1">// Number of teach row</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">mem_cpu</span><span class="p">;</span>
+                                <span class="c1">// Memory pointer at gpu side</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">mem_dev</span><span class="p">;</span>
+                                <span class="c1">// Memory pointer at cpu side for long</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">train_cpu</span><span class="p">;</span>
+                                <span class="c1">// Memory pointer for train for cpu</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">train_dev</span><span class="p">;</span>
+                                <span class="c1">// Memory pointer for train for dev</span>
+        <span class="kt">double</span> <span class="o">*</span><span class="n">train_p</span><span class="p">;</span>
+                                <span class="c1">// Pointer for access to train data</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">teach_cpu</span><span class="p">;</span>
+                                <span class="c1">// Memory pointer for teach for cpu</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">teach_dev</span><span class="p">;</span>
+                                <span class="c1">// Memory pointer for teach for dev</span>
+        <span class="kt">double</span> <span class="o">*</span><span class="n">teach_p</span><span class="p">;</span>
+                                <span class="c1">// Pointer for access to teach data</span>
+
+        <span class="kt">long</span> <span class="n">uniti</span><span class="p">;</span>
+                                <span class="c1">// Number of unit j</span>
+        <span class="kt">long</span> <span class="n">unitj</span><span class="p">;</span>
+                                <span class="c1">// Number of phases</span>
+        <span class="kt">long</span> <span class="n">cnt</span><span class="p">;</span>
+                                <span class="c1">// Number of counter</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id3">
+<h2>変数初期化<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
+<p>次に、変数の初期化を行います。変数の意味は、コメントの通りですが各層における
+ユニットの数を設定しています。l_numは、層数です。今回は、排他的論理和(XOR)を
+学習されるため、train_numは、2[入力]×4[状態]=8以上を指定します。teach_numも
+同様に、2[出力]×4[状態]=8以上を指定します。</p>
+<p>LIST 2. 変数初期化</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">l_num</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span>
+                                <span class="c1">// Number of z value at phase 0</span>
+<span class="n">z_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+                                <span class="c1">// Number of b value at phase 0</span>
+<span class="n">b_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+                                <span class="c1">// Number of w value at phase 0</span>
+<span class="n">w_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+                                <span class="c1">// Number of d value at phase 0</span>
+<span class="n">d_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+                                <span class="c1">// Number of d value at phase 0</span>
+<span class="n">db_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+                                <span class="c1">// Number of z value at phase 1</span>
+<span class="n">z_num</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">7</span><span class="p">;</span>
+                                <span class="c1">// Number of b value at phase 1</span>
+<span class="n">b_num</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">7</span><span class="p">;</span>
+                                <span class="c1">// Number of w value at phase 1</span>
+<span class="n">w_num</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+                                <span class="c1">// Number of d value at phase 1</span>
+<span class="n">d_num</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">7</span><span class="p">;</span>
+                                <span class="c1">// Number of d value at phase 1</span>
+<span class="n">db_num</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">7</span><span class="p">;</span>
+
+                                <span class="c1">// Number of z value at phase 2</span>
+<span class="n">z_num</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+                                <span class="c1">// Number of b value at phase 2</span>
+<span class="n">b_num</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+                                <span class="c1">// Number of w value at phase 2</span>
+<span class="n">w_num</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+                                <span class="c1">// Number of d value at phase 2</span>
+<span class="n">d_num</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+                                <span class="c1">// Number of d value at phase 2</span>
+<span class="n">db_num</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+
+                                <span class="c1">// Init pointer for memory</span>
+  <span class="n">mem_cpu</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+  <span class="n">mem_dev</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+<span class="n">train_cpu</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="n">train_dev</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+<span class="n">train_num</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+
+<span class="n">teach_cpu</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="n">teach_dev</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+<span class="n">teach_num</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id4">
+<h2>メモリの確保<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h2>
+<p>「汎用GPUにおける結合荷重及び関連値の確保と保持」で解説している通り、最初に
+ホスト(CPU)側とデバイス(GPU)側双方にメモリを確保する関数を作成し、関数名を
+alloc_mem()とします。引数は、変数宣言(LIST 1)と変数初期化(LIST 2)に挙げられ
+ているもので、以下の通りです。</p>
+<p>LIST 3. メモリの確保</p>
+<div class="highlight-c"><div class="highlight"><pre>                                <span class="c1">// Allocate liner memory</span>
+<span class="n">size</span> <span class="o">=</span> <span class="n">alloc_mem</span><span class="p">(</span>
+                                <span class="c1">// number of phases</span>
+        <span class="n">l_num</span><span class="p">,</span>
+                                <span class="c1">// number of phases for z</span>
+        <span class="n">z_num</span><span class="p">,</span>
+                                <span class="c1">// pointer for z array</span>
+        <span class="n">b_num</span><span class="p">,</span>
+                                <span class="c1">// pointer for b array</span>
+        <span class="n">w_num</span><span class="p">,</span>
+                                <span class="c1">// pointer for w array</span>
+        <span class="n">d_num</span><span class="p">,</span>
+                                <span class="c1">// pointer for d array</span>
+        <span class="n">db_num</span><span class="p">,</span>
+                                <span class="c1">// pointer for db array</span>
+        <span class="o">&amp;</span><span class="n">mem_cpu</span><span class="p">,</span>
+                                <span class="c1">// pointer for liner memory at cpu side</span>
+        <span class="o">&amp;</span><span class="n">mem_dev</span><span class="p">,</span>
+                                <span class="c1">// pointer for liner memory at gpu side</span>
+        <span class="o">&amp;</span><span class="n">train_cpu</span><span class="p">,</span>
+                                <span class="c1">// pointer for train data</span>
+        <span class="o">&amp;</span><span class="n">train_dev</span><span class="p">,</span>
+                                <span class="c1">// pointer for teach data</span>
+        <span class="n">train_num</span><span class="p">,</span>
+                                <span class="c1">// number of train row</span>
+        <span class="o">&amp;</span><span class="n">teach_cpu</span><span class="p">,</span>
+                                <span class="c1">// pointer for train data</span>
+        <span class="o">&amp;</span><span class="n">teach_dev</span><span class="p">,</span>
+                                <span class="c1">// pointer for teach data</span>
+        <span class="n">teach_num</span>
+                                <span class="c1">// number of teach row</span>
+<span class="p">);</span>
+
+<span class="k">if</span><span class="p">(</span> <span class="n">size</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="p">){</span>
+                                <span class="c1">// error terminate</span>
+        <span class="n">printf</span><span class="p">(</span><span class="s">&quot;Error in alloc_mem()</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+        <span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id5">
+<h2>訓練データと教師データ<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h2>
+<p>ここでは、パーセプトロンでは対応できない非線形データである排他的論理和の学習
+を行うため、train_cpu配列に入力値、teach_cpu配列に出力値を設定します。排他的
+論理和(XOR)については、別途、調べてご確認ください。</p>
+<p>LIST 4. 排他的論理和(XOR)の入力値(train)と出力値(teach)の設定</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">train_p</span> <span class="o">=</span> <span class="p">(</span><span class="kt">double</span> <span class="o">*</span><span class="p">)</span><span class="n">train_cpu</span><span class="p">;</span>
+<span class="n">teach_p</span> <span class="o">=</span> <span class="p">(</span><span class="kt">double</span> <span class="o">*</span><span class="p">)</span><span class="n">teach_cpu</span><span class="p">;</span>
+
+                                <span class="c1">// Set train data</span>
+<span class="n">train_p</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+<span class="n">train_p</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+
+<span class="n">train_p</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+<span class="n">train_p</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+
+<span class="n">train_p</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+<span class="n">train_p</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+
+<span class="n">train_p</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+<span class="n">train_p</span><span class="p">[</span><span class="mi">7</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+                                <span class="c1">// Set teach data</span>
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">;</span>
+<span class="n">teach_p</span><span class="p">[</span><span class="mi">7</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id6">
+<h2>データの転送<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h2>
+<p>ホスト(CPU)側メモリのデータを、デバイス(GPU)側メモリへ転送します。先述の通り
+メモリは線形化した状態で確保しているため、訓練用データ(train_cpu)、教師用デ
+ータ(teach_cpu)、作業用データ(mem_cpu)の3ブロックをそれぞれ転送するだけです。</p>
+<p>LIST 5. データの転送</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">err</span> <span class="o">=</span> <span class="n">cudaMemcpy</span><span class="p">(</span>
+        <span class="n">train_dev</span><span class="p">,</span>
+        <span class="n">train_cpu</span><span class="p">,</span>
+        <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">train_num</span><span class="p">,</span>
+        <span class="n">cudaMemcpyHostToDevice</span>
+<span class="p">);</span>                              <span class="c1">// Transfer train memory</span>
+
+<span class="k">if</span><span class="p">(</span> <span class="n">err</span> <span class="o">!=</span> <span class="n">cudaSuccess</span><span class="p">){</span>
+
+        <span class="n">printf</span><span class="p">(</span> <span class="s">&quot;%s in %s at above line %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+                <span class="n">cudaGetErrorString</span><span class="p">(</span> <span class="n">err</span> <span class="p">),</span>
+                <span class="n">__FILE__</span><span class="p">,</span>
+                <span class="n">__LINE__</span>
+        <span class="p">);</span>
+
+        <span class="n">exit</span><span class="p">(</span> <span class="n">EXIT_FAILURE</span> <span class="p">);</span>
+<span class="p">}</span>                               <span class="c1">// Check for cuda error</span>
+
+<span class="n">err</span> <span class="o">=</span> <span class="n">cudaMemcpy</span><span class="p">(</span>
+        <span class="n">teach_dev</span><span class="p">,</span>
+        <span class="n">teach_cpu</span><span class="p">,</span>
+        <span class="k">sizeof</span><span class="p">(</span><span class="kt">double</span><span class="p">)</span> <span class="o">*</span> <span class="n">z_num</span><span class="p">[</span><span class="n">l_num</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">teach_num</span><span class="p">,</span>
+        <span class="n">cudaMemcpyHostToDevice</span>
+<span class="p">);</span>                              <span class="c1">// Transfer teach memory</span>
+
+<span class="k">if</span><span class="p">(</span> <span class="n">err</span> <span class="o">!=</span> <span class="n">cudaSuccess</span><span class="p">){</span>
+
+        <span class="n">printf</span><span class="p">(</span> <span class="s">&quot;%s in %s at above line %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+                <span class="n">cudaGetErrorString</span><span class="p">(</span> <span class="n">err</span> <span class="p">),</span>
+                <span class="n">__FILE__</span><span class="p">,</span>
+                <span class="n">__LINE__</span>
+        <span class="p">);</span>
+
+        <span class="n">exit</span><span class="p">(</span> <span class="n">EXIT_FAILURE</span> <span class="p">);</span>
+<span class="p">}</span>                               <span class="c1">// Check for cuda error</span>
+
+                                <span class="c1">// Copy to device</span>
+<span class="n">err</span> <span class="o">=</span> <span class="n">cudaMemcpy</span><span class="p">(</span>
+        <span class="n">mem_dev</span><span class="p">,</span>
+        <span class="n">mem_cpu</span><span class="p">,</span>
+        <span class="n">size</span><span class="p">,</span>
+        <span class="n">cudaMemcpyHostToDevice</span>
+<span class="p">);</span>                              <span class="c1">// Transfer work memory</span>
+
+<span class="k">if</span><span class="p">(</span> <span class="n">err</span> <span class="o">!=</span> <span class="n">cudaSuccess</span><span class="p">){</span>
+
+        <span class="n">printf</span><span class="p">(</span> <span class="s">&quot;%s in %s at above line %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+                <span class="n">cudaGetErrorString</span><span class="p">(</span> <span class="n">err</span> <span class="p">),</span>
+                <span class="n">__FILE__</span><span class="p">,</span>
+                <span class="n">__LINE__</span>
+        <span class="p">);</span>
+
+        <span class="n">exit</span><span class="p">(</span> <span class="n">EXIT_FAILURE</span> <span class="p">);</span>
+<span class="p">}</span>                               <span class="c1">// Check for cuda error</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id7">
+<h2>結合荷重の初期化<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h2>
+<p>必要なデータをデバイス(GPU)側へ転送したので、バックプロパゲーションの処理の
+準備をします。先述の「Back Propagation」の項の通り処理を行ってゆきますが、
+結合荷重の初期化の説明をしていませんでした。乱数による初期化には、正規分布
+を用いる方法など、色々試されていますが、今回は-1から1の間の一様乱数を用いま
+す。ここでは、cudaに用意されているcurand_uniform()を用いていますが、まず、
+0から2までの乱数を発生させ、-1することで-1から1の乱数を求めます。求めた数値
+はユニットの数で割ることで簡単な正規化を行っています。そして、求めた値は各結
+合荷重wへセットします。</p>
+<p>set_instance()関数は、「汎用GPUにおける結合荷重及び関連値の確保と保持」の最
+後で説明していますが、線形化メモリへ格納してある各値を、構造体への再割当てを
+行っています。</p>
+<p>__synchreads()関数は、cudaの同期関数ですが、すべてのthreadsにおいて、この部
+分までの処理が完了するのを待って、後のコードを実行します。</p>
+<p>LIST 6. 結合荷重の初期化</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">__global__</span> <span class="kt">void</span> <span class="nf">init_wb</span><span class="p">(</span>
+        <span class="kt">long</span> <span class="n">trg_phase</span><span class="p">,</span>
+        <span class="kt">long</span> <span class="n">uniti</span><span class="p">,</span>
+        <span class="kt">long</span> <span class="n">unitj</span><span class="p">,</span>
+        <span class="kt">long</span>  <span class="n">l_num</span><span class="p">,</span>
+        <span class="kt">void</span> <span class="o">*</span><span class="n">mem</span><span class="p">,</span>
+        <span class="kt">long</span> <span class="n">seed</span>
+<span class="p">){</span>
+        <span class="kt">int</span> <span class="n">tid</span><span class="p">;</span>
+                                <span class="c1">// thread id</span>
+        <span class="kt">long</span> <span class="n">i_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of input side</span>
+        <span class="kt">long</span> <span class="n">j_cnt</span><span class="p">;</span>
+                                <span class="c1">// counter of output side</span>
+        <span class="n">NEURON_T</span> <span class="o">*</span><span class="n">n</span><span class="p">;</span>
+                                <span class="c1">// neuron structure</span>
+        <span class="kt">long</span> <span class="n">jphase</span><span class="p">;</span>
+                                <span class="c1">// number of output phase</span>
+        <span class="n">curandState</span> <span class="n">s</span><span class="p">;</span>
+                                <span class="c1">// for randomize function</span>
+        <span class="n">tid</span> <span class="o">=</span> <span class="n">blockIdx</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+        <span class="k">if</span><span class="p">(</span><span class="n">tid</span> <span class="o">&gt;</span> <span class="n">unitj</span> <span class="o">-</span> <span class="mi">1</span><span class="p">){</span>
+                                <span class="c1">// check for enable threads</span>
+                <span class="k">return</span><span class="p">;</span>
+        <span class="p">}</span>
+                                <span class="c1">// New neuron instance</span>
+        <span class="n">set_instance</span><span class="p">(</span> <span class="n">l_num</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">mem</span> <span class="p">);</span>
+                                <span class="c1">// Sync</span>
+        <span class="n">__syncthreads</span><span class="p">();</span>
+                                <span class="c1">// generate random number</span>
+        <span class="n">curand_init</span><span class="p">(</span><span class="n">seed</span><span class="p">,</span> <span class="n">tid</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">s</span><span class="p">);</span>
+
+        <span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">NEURON_T</span> <span class="o">*</span><span class="p">)</span><span class="n">mem</span><span class="p">;</span>
+                                <span class="c1">// set calculate phases</span>
+        <span class="n">jphase</span> <span class="o">=</span> <span class="n">trg_phase</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+                                <span class="c1">// set thread id</span>
+        <span class="n">j_cnt</span> <span class="o">=</span> <span class="n">tid</span><span class="p">;</span>
+                                <span class="c1">// i side loop</span>
+        <span class="k">for</span><span class="p">(</span> <span class="n">i_cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i_cnt</span> <span class="o">&lt;</span> <span class="n">uniti</span><span class="p">;</span> <span class="n">i_cnt</span><span class="o">++</span> <span class="p">){</span>
+
+                                <span class="c1">// set randomize number</span>
+                <span class="n">n</span><span class="o">-&gt;</span><span class="n">w</span><span class="p">[</span><span class="n">jphase</span><span class="p">][</span><span class="n">i_cnt</span> <span class="o">+</span> <span class="p">(</span><span class="n">uniti</span> <span class="o">*</span> <span class="n">j_cnt</span><span class="p">)]</span>
+                        <span class="o">=</span> <span class="p">(</span><span class="kt">double</span><span class="p">)((</span><span class="n">curand_uniform</span><span class="p">(</span><span class="o">&amp;</span><span class="n">s</span><span class="p">)</span><span class="o">*</span><span class="mi">2</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="o">/</span> <span class="p">(</span><span class="kt">double</span><span class="p">)</span><span class="n">uniti</span><span class="p">;</span>
+        <span class="p">}</span>
+                                <span class="c1">// normal return</span>
+        <span class="k">return</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>LIST 7. デバイス(GPU)側による初期化関数の呼出し</p>
+<div class="highlight-c"><div class="highlight"><pre>                                <span class="c1">// Set unit number i, j and k</span>
+<span class="n">uniti</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+<span class="n">unitj</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+                                <span class="c1">// Calling initialize function</span>
+<span class="k">for</span><span class="p">(</span> <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">cnt</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="n">cnt</span><span class="o">++</span> <span class="p">){</span>
+
+                                <span class="c1">// Set unit number i,j</span>
+        <span class="n">uniti</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="n">cnt</span> <span class="o">+</span> <span class="mi">0</span><span class="p">];</span>
+        <span class="n">unitj</span> <span class="o">=</span> <span class="n">z_num</span><span class="p">[</span><span class="n">cnt</span> <span class="o">+</span> <span class="mi">1</span><span class="p">];</span>
+
+        <span class="n">init_wb</span><span class="o">&lt;&lt;&lt;</span><span class="n">BLOCKS</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span>
+                <span class="n">cnt</span><span class="p">,</span>
+                <span class="n">uniti</span><span class="p">,</span>
+                <span class="n">unitj</span><span class="p">,</span>
+                <span class="n">l_num</span><span class="p">,</span>
+                <span class="n">mem_dev</span><span class="p">,</span>
+                <span class="p">(</span><span class="kt">long</span><span class="p">)</span><span class="n">time</span><span class="p">(</span><span class="nb">NULL</span><span class="p">)</span>
+        <span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="train-inference">
+<h2>訓練(train)と推論(inference)<a class="headerlink" href="#train-inference" title="Permalink to this headline">¶</a></h2>
+<p>ここで、冒頭に説明した図1.訓練(train)と推論(inference)の処理を行います。
+外側のループは、ForwardpropagationとBackpropagationの繰り返しループ、
+つまり、訓練ループです。その中に</p>
+<ol class="arabic simple">
+<li>calc_forward()</li>
+<li>calc_delta_at_out()</li>
+<li>calc_delta()</li>
+<li>calc_delta_w()</li>
+</ol>
+<p>があり、calc_forward()は入力層から出力層に向かって順伝搬ループ、
+calc_delta_at_out()は出力層分の一回実行され、calc_delta()とcalc_delta_w()
+は、出力層側(しかし出力層を除く)から入力層に向かって逆伝搬ループを行います。
+最後に、デバイス(GPU)側から作業用メモリを転送して、終了です。</p>
+<p>LIST 8. 訓練(train)</p>
+<div class="highlight-c"><div class="highlight"><pre><span class="kt">long</span> <span class="n">data_cur</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="k">for</span><span class="p">(</span><span class="kt">int</span> <span class="n">loop_cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">loop_cnt</span> <span class="o">&lt;</span> <span class="mi">3000</span><span class="p">;</span> <span class="n">loop_cnt</span><span class="o">++</span><span class="p">,</span> <span class="n">data_cur</span><span class="o">++</span> <span class="p">){</span>
+
+        <span class="k">if</span><span class="p">(</span> <span class="n">data_cur</span> <span class="o">==</span> <span class="mi">4</span> <span class="p">){</span>
+
+                <span class="n">data_cur</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="p">}</span>
+                                <span class="c1">// Call forward function</span>
+        <span class="k">for</span><span class="p">(</span> <span class="n">cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">cnt</span> <span class="o">&lt;</span> <span class="n">l_num</span><span class="o">-</span><span class="mi">1</span><span class="p">;</span> <span class="n">cnt</span><span class="o">++</span> <span class="p">){</span>
+
+                <span class="n">calc_forward</span><span class="o">&lt;&lt;&lt;</span><span class="n">BLOCKS</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span>
+                        <span class="n">loop_cnt</span><span class="p">,</span>
+                        <span class="n">cnt</span><span class="p">,</span>
+                        <span class="n">mem_dev</span><span class="p">,</span>
+                        <span class="p">(</span><span class="kt">double</span> <span class="o">*</span><span class="p">)</span><span class="n">train_dev</span><span class="p">,</span>
+                        <span class="n">data_cur</span><span class="p">,</span>
+                        <span class="n">debug</span>
+                <span class="p">);</span>
+        <span class="p">}</span>
+                                <span class="c1">// Call delta function for output</span>
+        <span class="n">calc_delta_at_out</span><span class="o">&lt;&lt;&lt;</span><span class="n">BLOCKS</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span>
+                <span class="mi">1</span><span class="p">,</span>
+                <span class="n">mem_dev</span><span class="p">,</span>
+                <span class="p">(</span><span class="kt">double</span> <span class="o">*</span><span class="p">)</span><span class="n">teach_dev</span><span class="p">,</span>
+                <span class="n">data_cur</span>
+        <span class="p">);</span>
+                                <span class="c1">// Call delta function</span>
+        <span class="k">for</span><span class="p">(</span> <span class="n">cnt</span> <span class="o">=</span> <span class="n">l_num</span><span class="o">-</span><span class="mi">2</span><span class="p">;</span> <span class="n">cnt</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">cnt</span><span class="o">--</span> <span class="p">){</span>
+
+                <span class="n">calc_delta</span><span class="o">&lt;&lt;&lt;</span><span class="n">BLOCKS</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span>
+                        <span class="n">cnt</span><span class="p">,</span>
+                        <span class="n">mem_dev</span>
+                <span class="p">);</span>
+        <span class="p">}</span>
+                                <span class="c1">// Call delta function for w</span>
+        <span class="k">for</span><span class="p">(</span> <span class="n">cnt</span> <span class="o">=</span> <span class="n">l_num</span><span class="o">-</span><span class="mi">2</span><span class="p">;</span> <span class="n">cnt</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">cnt</span><span class="o">--</span> <span class="p">){</span>
+
+                <span class="n">calc_delta_w</span><span class="o">&lt;&lt;&lt;</span><span class="n">BLOCKS</span><span class="p">,</span><span class="mi">1</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span>
+                        <span class="n">cnt</span><span class="p">,</span>
+                        <span class="n">mem_dev</span>
+                <span class="p">);</span>
+        <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">err</span> <span class="o">=</span> <span class="n">cudaMemcpy</span><span class="p">(</span>
+        <span class="n">mem_cpu</span><span class="p">,</span>
+        <span class="n">mem_dev</span><span class="p">,</span>
+        <span class="mi">1</span><span class="p">,</span><span class="c1">//size,</span>
+        <span class="n">cudaMemcpyDeviceToHost</span>
+<span class="p">);</span>
+
+<span class="k">if</span><span class="p">(</span> <span class="n">err</span> <span class="o">!=</span> <span class="n">cudaSuccess</span><span class="p">){</span>
+
+        <span class="n">printf</span><span class="p">(</span> <span class="s">&quot;%s in %s at above line %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span>
+                <span class="n">cudaGetErrorString</span><span class="p">(</span> <span class="n">err</span> <span class="p">),</span>
+                <span class="n">__FILE__</span><span class="p">,</span>
+                <span class="n">__LINE__</span>
+        <span class="p">);</span>
+
+        <span class="n">exit</span><span class="p">(</span> <span class="n">EXIT_FAILURE</span> <span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>今回は、calc_forward()の中にprintf()を組み込み、出力層のzを出力することで、
+推論(inference)におけるForwardpropagationの結果を得ています。</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Train and Inference</a><ul>
+<li><a class="reference internal" href="#train">訓練(train)</a></li>
+<li><a class="reference internal" href="#id1">フローチャート</a></li>
+<li><a class="reference internal" href="#id2">変数宣言</a></li>
+<li><a class="reference internal" href="#id3">変数初期化</a></li>
+<li><a class="reference internal" href="#id4">メモリの確保</a></li>
+<li><a class="reference internal" href="#id5">訓練データと教師データ</a></li>
+<li><a class="reference internal" href="#id6">データの転送</a></li>
+<li><a class="reference internal" href="#id7">結合荷重の初期化</a></li>
+<li><a class="reference internal" href="#train-inference">訓練(train)と推論(inference)</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="BackPropagation.html"
+                        title="previous chapter">Back Propagation</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/TrainAndInference.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="BackPropagation.html" title="Back Propagation"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &copy; Copyright 2017, Akihiro Kashiwagi.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.6.
+    </div>
+  </body>
+</html>

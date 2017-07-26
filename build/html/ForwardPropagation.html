@@ -8,7 +8,7 @@
     
     <title>Forward Propagation &mdash; IntroductionToBackpropagationWithGPU 0.1 documentation</title>
     
-    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     
     <script type="text/javascript">
@@ -23,13 +23,13 @@
     <script type="text/javascript" src="_static/jquery.js"></script>
     <script type="text/javascript" src="_static/underscore.js"></script>
     <script type="text/javascript" src="_static/doctools.js"></script>
-    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="top" title="IntroductionToBackpropagationWithGPU 0.1 documentation" href="index.html" />
     <link rel="next" title="汎用GPUにおける結合荷重及び関連値の確保と保持" href="AllocateMemory4GPGPU.html" />
     <link rel="prev" title="Welcome to test’s documentation!" href="index.html" /> 
   </head>
-  <body>
-    <div class="related">
+  <body role="document">
+    <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -41,14 +41,14 @@
         <li class="right" >
           <a href="index.html" title="Welcome to test’s documentation!"
              accesskey="P">previous</a> |</li>
-        <li><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
       </ul>
     </div>  
 
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
-          <div class="body">
+          <div class="body" role="main">
             
   <div class="section" id="forward-propagation">
 <h1>Forward Propagation<a class="headerlink" href="#forward-propagation" title="Permalink to this headline">¶</a></h1>
@@ -74,7 +74,7 @@
 <p>これは、一般的な総和の式ですが、入力される信号 <span class="math">\(x\)</span> に荷重 <span class="math">\(w\)</span> を
 掛けて、その総計をとり、バイアスを足すというものです。プログラミング言語(C言
 語)で表すと、このようになります。</p>
-<div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">z</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<div class="highlight-c"><div class="highlight"><pre><span class="n">z</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
 
 <span class="k">for</span><span class="p">(</span> <span class="n">i_cnt</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i_cnt</span> <span class="o">&lt;</span> <span class="n">N</span><span class="p">;</span> <span class="n">i_cnt</span><span class="o">++</span> <span class="p">){</span>
 
@@ -88,9 +88,9 @@
 神経細胞を模式的に表すと、下記のようになります。左の図は、実際の神経細胞、右の
 図は、その数理モデルの模式図です。つまり、複数の入力を受取り、一つの出力を次の
 神経細胞に渡す生きたデバイスです。</p>
-<div class="figure align-center">
+<div class="figure align-center" id="id4">
 <img alt="神経細胞とモデル" src="_images/neuron_model.png" />
-<p class="caption">図1.神経細胞とモデル</p>
+<p class="caption"><span class="caption-text">図1.神経細胞とモデル</span></p>
 </div>
 <p>この図を例に説明すると、前の神経細胞からの入力値 <span class="math">\(x_1\)</span> 〜 <span class="math">\(x_3\)</span> に、
 それぞれの結合荷重 <span class="math">\(w_1\)</span> 〜 <span class="math">\(w_3\)</span> を掛けた値を合計し、それにバイア
@@ -120,9 +120,9 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
 <p>シグモイド関数は、非線形の関数であり、入力の値域を <span class="math">\(-∞\)</span> 〜 <span class="math">\(+∞\)</span> に
 取る、出力 <span class="math">\(0\)</span> 〜 <span class="math">\(1\)</span> の関数です。出力は下記のようになります。シグ
 モイドとは、アルファベットのSの意味です。</p>
-<div class="figure align-center">
+<div class="figure align-center" id="id5">
 <img alt="シグモイド曲線" src="_images/sigmoid.png" />
-<p class="caption">図2.シグモイド曲線</p>
+<p class="caption"><span class="caption-text">図2.シグモイド曲線</span></p>
 </div>
 <p>注意しなければいけないのは、入力の値域が無限大とはいえ、その可変域は限られる点
 です。大きすぎる値や小さすぎる値を入力しても、 <span class="math">\(1\)</span> または <span class="math">\(0\)</span> の出
@@ -134,8 +134,8 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
 <h2>論理積と論理和による実際の計算例<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h2>
 <p>論理積と論理和の計算を例に、実際にForward Propagation(順伝搬)を計算してみます。
 論理積の入力と出力(真理値表)は、以下の通りです。</p>
-<table border="1" class="docutils">
-<caption>論理積(AND)</caption>
+<table border="1" class="docutils" id="id6">
+<caption><span class="caption-text">論理積(AND)</span><a class="headerlink" href="#id6" title="Permalink to this table">¶</a></caption>
 <colgroup>
 <col width="25%" />
 <col width="25%" />
@@ -181,8 +181,8 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
 <p>そして、結合荷重 <span class="math">\(w_1=0.53\)</span> と <span class="math">\(w_2=0.33\)</span>、閾値 <span class="math">\(θ=0.7\)</span> とす
 ると、式1と式2を上記の表のそれぞれの値について計算した結果は、以下のようになり
 ます。</p>
-<table border="1" class="docutils">
-<caption>論理積(AND)の計算結果</caption>
+<table border="1" class="docutils" id="id7">
+<caption><span class="caption-text">論理積(AND)の計算結果</span><a class="headerlink" href="#id7" title="Permalink to this table">¶</a></caption>
 <colgroup>
 <col width="25%" />
 <col width="25%" />
@@ -223,8 +223,8 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
 </table>
 <p>閾値 <span class="math">\(θ\)</span> 以下の場合は <span class="math">\(z=0\)</span> 、閾値 <span class="math">\(θ\)</span> 以上の場合は <span class="math">\(z=1\)</span>
 となります。また、論理和の入力と出力(真理値表)は、以下の通りです。</p>
-<table border="1" class="docutils">
-<caption>論理和(OR)</caption>
+<table border="1" class="docutils" id="id8">
+<caption><span class="caption-text">論理和(OR)</span><a class="headerlink" href="#id8" title="Permalink to this table">¶</a></caption>
 <colgroup>
 <col width="25%" />
 <col width="25%" />
@@ -270,8 +270,8 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
 <p>同じように、結合荷重 <span class="math">\(w_1=0.85\)</span> と <span class="math">\(w_2=0.85\)</span> 、閾値 <span class="math">\(θ=0.7\)</span>
 とすると、式1と式2を上記の表のそれぞれの値について計算した結果は、以下のように
 なります。</p>
-<table border="1" class="docutils">
-<caption>論理和(OR)の計算結果</caption>
+<table border="1" class="docutils" id="id9">
+<caption><span class="caption-text">論理和(OR)の計算結果</span><a class="headerlink" href="#id9" title="Permalink to this table">¶</a></caption>
 <colgroup>
 <col width="25%" />
 <col width="25%" />
@@ -320,7 +320,7 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar">
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
@@ -338,12 +338,14 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
   <h4>Next topic</h4>
   <p class="topless"><a href="AllocateMemory4GPGPU.html"
                         title="next chapter">汎用GPUにおける結合荷重及び関連値の確保と保持</a></p>
-  <h3>This Page</h3>
-  <ul class="this-page-menu">
-    <li><a href="_sources/ForwardPropagation.txt"
-           rel="nofollow">Show Source</a></li>
-  </ul>
-<div id="searchbox" style="display: none">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/ForwardPropagation.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
   <h3>Quick search</h3>
     <form class="search" action="search.html" method="get">
       <input type="text" name="q" />
@@ -360,7 +362,7 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="related">
+    <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
@@ -372,12 +374,12 @@ tanh関数、また出力が線形になる正規化線形関数などがあり�
         <li class="right" >
           <a href="index.html" title="Welcome to test’s documentation!"
              >previous</a> |</li>
-        <li><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">IntroductionToBackpropagationWithGPU 0.1 documentation</a> &raquo;</li> 
       </ul>
     </div>
-    <div class="footer">
+    <div class="footer" role="contentinfo">
         &copy; Copyright 2017, Akihiro Kashiwagi.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.3.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.3.6.
     </div>
   </body>
 </html>

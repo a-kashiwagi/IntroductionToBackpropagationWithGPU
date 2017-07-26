@@ -72,21 +72,37 @@ LIST 1. NEUTON_T構造体
 					// number of db
 	} NEURON_T;
 
-LIST 2. 変数宣言
+LIST 2. 引数と変数宣言
 
 .. code-block:: cpp
 
-	cudaError_t err;
+	long alloc_mem(
+	          long  l_num,
+	          long *z_num,
+	          long *b_num,
+	          long *w_num,
+	          long *d_num,
+	          long *db_num,
+	        void **mem_cpu,
+	        void **mem_dev,
+	        void **train_cpu,
+	        void **train_dev,
+	          long train_num,
+	        void **teach_cpu,
+	        void **teach_dev,
+	          long teach_num
+	){
+		cudaError_t err;
 					// Error code of cuda
-	long phase;
+		long phase;
 					// Number of phase
-	long size;
+		long size;
 					// Size of memory
-	long cur;
+		long cur;
 					// Cursor
-	long *mem_cpu_p;
+		long *mem_cpu_p;
 
-	NEURON_T *n;
+		NEURON_T *n;
 
 LIST 3. サイズ計算
 
@@ -142,6 +158,106 @@ LIST 4. メモリ確保
 素である各値へのポインタへ再割り当てすることで、使用可能となります。再割り当
 て処理は、汎用GPU上においても、CPU上でも同様です。
 
+LIST 4.1は、このセクションでは必要ありませんが、後の項である「Back Propagation
+」で必要になってくるため、ここで挙げておきます。
+
+LIST 4.1. その他のメモリの確保
+
+.. code-block:: c
+
+        *train_cpu = (void *)malloc(
+                sizeof(double) * z_num[0] * train_num
+        );
+                                        // Train memory allocate at CPU
+        if( train_cpu == NULL ){ 
+                return( -3 );
+        }
+
+        err = cudaMalloc( (void**)&(*train_dev),
+                sizeof(double) * z_num[0] * train_num
+        );
+                                        // Train memory allocate at GPU
+        if( err != cudaSuccess){
+                return( -4 );
+        }
+
+        *teach_cpu = (void *)malloc(
+                sizeof(double) * z_num[l_num-1] * teach_num
+        );
+                                        // Teach memory allocate at CPU
+        if( teach_cpu == NULL ){ 
+                return( -5 );
+        }
+
+        err = cudaMalloc( (void**)&(*teach_dev),
+                sizeof(double) * z_num[l_num-1] * teach_num
+        );
+                                        // Teach memory allocate at GPU
+        if( err != cudaSuccess){
+                return( -6 );
+        }
+
+
+始めに述べた「一覧表1.データ構造」のNo.2からNo.6は、モデルの層数とz,b,w,d,db
+各値の層ごとの数を格納する領域となっています。ここでは、その値を設定します。
+
+LIST 5. 層数と各値の数の格納
+
+.. code-block:: c
+
+                                        // Init a cursor
+        cur = 0;
+
+        n = (NEURON_T *)*mem_cpu;
+        cur++;
+                                        // Store a pointer address
+                                        // mem_cpu_p = (long *)*mem_cpu;
+        mem_cpu_p = (long *)&n[cur];
+                                        // Init a cursor
+        cur = 0;
+                                        // Set number of phases
+        mem_cpu_p[cur] = l_num;
+        cur++;
+                                        // Set number of each array
+        for(phase = 0; phase < l_num; phase++){
+
+                mem_cpu_p[cur] = z_num[phase];
+                cur++;
+                                        // For z_num
+        }
+
+        for(phase = 0; phase < l_num; phase++){
+
+                mem_cpu_p[cur] = b_num[phase];
+                cur++;
+                                        // For b_num
+        }
+
+        for(phase = 0; phase < l_num; phase++){
+
+                mem_cpu_p[cur] = w_num[phase];
+                cur++;
+                                        // For w_num
+        }
+
+        for(phase = 0; phase < l_num; phase++){
+
+                mem_cpu_p[cur] = d_num[phase];
+                cur++;
+                                        // For d_num
+        }
+
+        for(phase = 0; phase < l_num; phase++){
+
+                mem_cpu_p[cur] = db_num[phase];
+                cur++;
+                                        // For db_num
+        }
+
+        return size;
+                                        // Normal Terminate
+
+
 構造体への再割当て
 ==================
 
@@ -149,7 +265,7 @@ LIST 4. メモリ確保
 ては、上記「一覧表1.構造体要素」を再計算し、それぞれの保持領域への先頭アドレ
 スを「1.構造体への保持用領域」の要素である各値へのポインタへ格納し直します。
 
-LIST 5. 引数の取得
+LIST 6. 引数の取得
 
 .. code-block:: cpp
 
@@ -158,7 +274,7 @@ LIST 5. 引数の取得
 		void **mem
 	){
 
-LIST 6. 変数宣言
+LIST 7. 変数宣言
 
 .. code-block:: cpp
 
@@ -172,7 +288,7 @@ LIST 6. 変数宣言
 					// Counter for phase
 	long phase;
 
-LIST 7. メモリ領域の確保
+LIST 8. メモリ領域の確保
 
 .. code-block:: cpp
 
@@ -195,7 +311,7 @@ LIST 7. メモリ領域の確保
 	n->d  = (double**)malloc( sizeof(double*) * l_num);
 	n->db = (double**)malloc( sizeof(double*) * l_num);
 
-LIST 8. メモリアドレスのポインタへの再割当て
+LIST 9. メモリアドレスのポインタへの再割当て
 
 .. code-block:: cpp
 

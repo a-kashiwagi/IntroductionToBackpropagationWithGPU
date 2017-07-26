@@ -14,6 +14,7 @@ Contents:
    ForwardPropagation
    AllocateMemory4GPGPU
    BackPropagation
+   TrainAndInference
 
 Indices and tables
 ==================

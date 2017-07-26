@@ -248,7 +248,22 @@ LIST 5. :math:`\delta` の計算
 		}
 					// Normal return
 		return;
+
+
+LIST 6. シグモイド関数とその微分関数
+
+.. code-block:: c
+
+	__device__ double sigmoid( double x ){
+
+		return 1 / (1 + exp( -1 * x * SIGMOID_ALPHA ));
 	}
+
+	__device__ double differented_sigmoid( double x ){
+
+	        return sigmoid( x ) * ( 1 - sigmoid( x ) );
+	}
+
 
 計算方法は先述の通りですが、構造体要素に付いている配列添え字は、例えば
 n->z[jphase][j_cnt] の場合、jphase層のj_cntユニットのz値を表しています。
@@ -257,10 +272,11 @@ n->dbは、バイアス :math:`b` の誤差信号 :math:`\delta` です。計算
 力層における :math:`\delta_{k}` の計算処理の具体的なコードは、以下のよ
 うになります。
 
+
 GPUによる出力層 :math:`\delta` の処理
 =====================================
 
-LIST 6.引数取得
+LIST 7.引数取得
 
 .. code-block:: c
 
@@ -275,7 +291,7 @@ LIST 6.引数取得
 		long teach_num
 	){
 
-LIST 7.変数宣言
+LIST 8.変数宣言
 
 .. code-block:: c
 
@@ -289,7 +305,7 @@ LIST 7.変数宣言
 					// number of output phase
 	long unitj;
 
-LIST 8.GPUに関連した処理
+LIST 9.GPUに関連した処理
 
 .. code-block:: c
 
@@ -305,7 +321,7 @@ LIST 8.GPUに関連した処理
 		return;
 	}
 
-LIST 9. 出力層における :math:`\delta` の計算
+LIST 10. 出力層における :math:`\delta` の計算
 
 .. code-block:: c
 
@@ -322,7 +338,6 @@ LIST 9. 出力層における :math:`\delta` の計算
 		}
 					// Normal return
 		return;
-	}
 
 プログラムの構造は、前述の中間層における :math:`\delta` と同じです。
 引数に教師信号teachとその数teach_numを受け取っています。こうして計
@@ -332,7 +347,7 @@ LIST 9. 出力層における :math:`\delta` の計算
 GPUによる結合荷重 :math:`w` の更新処理
 ======================================
 
-LIST 10.引数取得
+LIST 11.引数取得
 
 .. code-block:: c
 
@@ -343,7 +358,7 @@ LIST 10.引数取得
 		void *mem
 	){
 
-LIST 11.変数宣言
+LIST 12.変数宣言
 
 .. code-block:: c
 
@@ -374,7 +389,7 @@ LIST 11.変数宣言
 	double ETA;
 					// Number of learning rate
 
-LIST 12.GPUに関連した処理
+LIST 13.GPUに関連した処理
 
 .. code-block:: c
 
@@ -395,7 +410,7 @@ LIST 12.GPUに関連した処理
 		return;
 	}
 
-LIST 13. :math:`\delta` による :math:`w` の更新
+LIST 14. :math:`\delta` による :math:`w` の更新
 
 .. code-block:: c
 
@@ -423,7 +438,6 @@ LIST 13. :math:`\delta` による :math:`w` の更新
 		}
 					// Normal terminate
 		return;
-	}
 
 前述の式(2)の通りに :math:`w` を更新しています。ziに関しては、前段階の処
 理であるForward Propagationの都合で、活性化関数（シグモイド関数）を通した
