@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to test's documentation!
-================================
+An introduction to Backpropagation with GPU
+===========================================
 
 Contents:
 
@@ -15,6 +15,7 @@ Contents:
    AllocateMemory4GPGPU
    BackPropagation
    TrainAndInference
+   Result
 
 Indices and tables
 ==================

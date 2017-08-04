@@ -25,6 +25,7 @@
     <script type="text/javascript" src="_static/doctools.js"></script>
     <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="top" title="IntroductionToBackpropagationWithGPU 0.1 documentation" href="index.html" />
+    <link rel="next" title="結果(Result)" href="Result.html" />
     <link rel="prev" title="Back Propagation" href="BackPropagation.html" /> 
   </head>
   <body role="document">
@@ -34,6 +35,9 @@
         <li class="right" style="margin-right: 10px">
           <a href="genindex.html" title="General Index"
              accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="Result.html" title="結果(Result)"
+             accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="BackPropagation.html" title="Back Propagation"
              accesskey="P">previous</a> |</li>
@@ -344,8 +348,8 @@ alloc_mem()とします。引数は、変数宣言(LIST 1)と変数初期化(LIS
 を用いる方法など、色々試されていますが、今回は-1から1の間の一様乱数を用いま
 す。ここでは、cudaに用意されているcurand_uniform()を用いていますが、まず、
 0から2までの乱数を発生させ、-1することで-1から1の乱数を求めます。求めた数値
-はユニットの数で割ることで簡単な正規化を行っています。そして、求めた値は各結
-合荷重wへセットします。</p>
+はユニットの数で割ることで簡単な正規化を行い、そして、求めた値は各結合荷重w
+へセットします。</p>
 <p>set_instance()関数は、「汎用GPUにおける結合荷重及び関連値の確保と保持」の最
 後で説明していますが、線形化メモリへ格納してある各値を、構造体への再割当てを
 行っています。</p>
@@ -423,12 +427,21 @@ alloc_mem()とします。引数は、変数宣言(LIST 1)と変数初期化(LIS
 <span class="p">}</span>
 </pre></div>
 </div>
+<p>Neural Networkは、すべての層を同時に計算することはできません。それは、
+現在の層を計算するのに、前あるいは後ろの層の計算結果が必要となるため
+です。そこで今回は、層内の神経細胞ユニットの並列化を行っています。つ
+まり、現在計算している層内のユニットを同時に計算しています。cudaから
+デバイス(GPU)側関数を呼び出す際に指定するBLOCKSとTHREADSは、処理する
+データのサイズに合わせて、適ほど指定します。</p>
 </div>
 <div class="section" id="train-inference">
 <h2>訓練(train)と推論(inference)<a class="headerlink" href="#train-inference" title="Permalink to this headline">¶</a></h2>
 <p>ここで、冒頭に説明した図1.訓練(train)と推論(inference)の処理を行います。
 外側のループは、ForwardpropagationとBackpropagationの繰り返しループ、
-つまり、訓練ループです。その中に</p>
+つまり、訓練ループです。今回は何度か試した結果、3000回ほどに設定してい
+ます。また、data_curは、訓練に使っているデータのカーソルを示しています
+が、今回の排他的論理和(XOR)は、2[入力]×4[状態]であるため、4回ごとにリセ
+ットしています。そして、そのループの中には、</p>
 <ol class="arabic simple">
 <li>calc_forward()</li>
 <li>calc_delta_at_out()</li>
@@ -534,6 +547,9 @@ calc_delta_at_out()は出力層分の一回実行され、calc_delta()とcalc_de
   <h4>Previous topic</h4>
   <p class="topless"><a href="BackPropagation.html"
                         title="previous chapter">Back Propagation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="Result.html"
+                        title="next chapter">結果(Result)</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -564,6 +580,9 @@ calc_delta_at_out()は出力層分の一回実行され、calc_delta()とcalc_de
         <li class="right" style="margin-right: 10px">
           <a href="genindex.html" title="General Index"
              >index</a></li>
+        <li class="right" >
+          <a href="Result.html" title="結果(Result)"
+             >next</a> |</li>
         <li class="right" >
           <a href="BackPropagation.html" title="Back Propagation"
              >previous</a> |</li>
