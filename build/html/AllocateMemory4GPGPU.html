@@ -67,7 +67,8 @@
 <div class="section" id="id1">
 <h2>不連続な領域としてではなく、連続した領域としてメモリを確保する<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
 <p>ここでは、汎用GPUを利用するにあたって、結合荷重 <span class="math">\(w\)</span> やバイアス <span class="math">\(b\)</span> 、
-出力 <span class="math">\(z\)</span> や誤差 <span class="math">\(d\)</span> の確保と保持の仕方について、説明します。</p>
+出力 <span class="math">\(z\)</span> や誤差 <span class="math">\(d\)</span> の確保と保持の仕方について、説明します。使用する
+汎用GPUは、デファクトスタンダードでもあるnVIDIA、コンパイラはCUDAを使用します。</p>
 <p>CPU上では、適ほど構造体を定義し、その構造体の要素としてポインタを用意すること
 で、インスタンス作成時にそれぞれ必要なだけ、malloc()することができます。この
 状態でそのポインタの実体に対して計算を行えば利用可能ですが、メモリ上は連続し
